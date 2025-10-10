@@ -1,0 +1,49 @@
+[project]
+name = "ssw555-example-project"
+version = "0.1.0"
+description = "SSW555 Student Starter Pack - Flask web application templates"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.1.2",
+    "flask-sqlalchemy>=3.1.1",
+    "pytest>=8.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "bandit>=1.7.5",
+    "flask-cors>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N"]
+ignore = ["E501"]  # Line too long (handled by formatter)
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    ".venv/*",
+    "venv/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

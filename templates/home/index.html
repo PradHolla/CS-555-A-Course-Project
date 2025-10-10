@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Expense Splitter • Split Expenses Smartly{% endblock %}
+
+{% block extra_head %}
+<style>
+    @keyframes gradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    .animated-gradient {
+        background: linear-gradient(-45deg, #10b981, #06b6d4, #14b8a6, #0891b2);
+        background-size: 400% 400%;
+        animation: gradient 15s ease infinite;
+    }
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-20px); }
+        60% { transform: translateY(-10px); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="text-center mb-12">
+    <div class="inline-block mb-6">
+        <div class="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full shadow-2xl animate-pulse">
+            <span class="text-5xl text-white">�</span>
+        </div>
+    </div>
+    <h1 class="text-5xl font-bold mb-4 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+        Expense Splitter
+    </h1>
+    <p class="text-xl text-gray-600 mb-8">Smart financial tracking for teams and groups</p>
+
+    <div class="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-teal-50 px-6 py-4 rounded-2xl border border-emerald-200">
+        <span class="inline-flex items-center justify-center w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 text-white rounded-lg font-bold">
+            💡
+        </span>
+        <div class="text-left">
+            <p class="text-sm font-semibold text-gray-900">Get Started</p>
+            <p class="text-sm text-gray-600">Track expenses, split bills fairly, and manage group finances with ease</p>
+        </div>
+    </div>
+</div>
+
+<div class="mb-12">
+    <h2 class="text-3xl font-bold text-center mb-8 text-gray-900">Key Features</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+        <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
+            <div class="relative bg-white p-6 rounded-xl border border-gray-200">
+                <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-lg font-bold text-xl mb-4">
+                    💰
+                </div>
+                <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
+                    Smart Splitting
+                </h3>
+                <p class="text-gray-600 text-sm">Automatically calculate fair splits among multiple participants with precision.</p>
+            </div>
+        </div>
+
+        <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-r from-teal-600 to-cyan-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
+            <div class="relative bg-white p-6 rounded-xl border border-gray-200">
+                <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-lg font-bold text-xl mb-4">
+                    📊
+                </div>
+                <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
+                    Transaction Log
+                </h3>
+                <p class="text-gray-600 text-sm">Keep track of all expenses with detailed transaction history and timestamps.</p>
+            </div>
+        </div>
+
+        <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
+            <div class="relative bg-white p-6 rounded-xl border border-gray-200">
+                <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-lg font-bold text-xl mb-4">
+                    ⚡
+                </div>
+                <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
+                    Modern UI
+                </h3>
+                <p class="text-gray-600 text-sm">Sleek terminal-inspired interface with a professional tech-forward design.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-12">
+    <div class="group relative overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-200 hover:border-emerald-400 transition-all duration-300 hover:shadow-xl max-w-4xl mx-auto">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-400 to-teal-500 opacity-10 rounded-full -mr-16 -mt-16"></div>
+        <div class="p-8">
+            <div class="text-5xl mb-4 text-center" style="animation: bounce 2s infinite;">💳</div>
+            <h3 class="text-2xl font-bold mb-3 text-gray-900 text-center">Start Splitting Expenses</h3>
+            <p class="text-gray-600 mb-6 text-center">A sleek tech-forward finance tracker. Split expenses with a modern terminal-inspired interface.</p>
+            <div class="flex flex-wrap gap-2 mb-6 justify-center">
+                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Smart Splitting</span>
+                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Dark Theme</span>
+                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Transaction Log</span>
+                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Real-time Calculations</span>
+            </div>
+            <div class="text-center">
+                <a href="/expense-splitter" class="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 group-hover:scale-105 shadow-lg">
+                    Get Started
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-8 mb-8">
+    <h2 class="text-3xl font-bold text-center mb-8 text-gray-900">🏗️ Built for Teams</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                📁 Simple & Clean
+            </h3>
+            <p class="text-gray-600 text-sm">Intuitive interface that makes expense tracking effortless for everyone.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                🎨 Modern Design
+            </h3>
+            <p class="text-gray-600 text-sm">Terminal-inspired aesthetic with a professional, tech-forward look.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                🔧 Easy to Extend
+            </h3>
+            <p class="text-gray-600 text-sm">Built with clean architecture - customize and extend as you need.</p>
+        </div>
+    </div>
+</div>
+
+<div class="text-center py-8">
+    <div class="inline-block animated-gradient text-white px-8 py-4 rounded-full font-bold text-lg shadow-2xl">
+        Ready to Split Expenses! 💰
+    </div>
+</div>
+{% endblock %}
