@@ -1,4 +1,4 @@
-# 🚀 Student Starter Pack - SSW555 Project Template
+# SSW555 Project Template
 
 A collection of beautifully designed, production-ready web applications built with Flask, SQLAlchemy, and Tailwind CSS. Perfect for students looking to jumpstart their SSW555 course projects.
 
