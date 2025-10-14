@@ -63,6 +63,69 @@ git config user.email "your.email@example.com"
 
 ---
 
+## 🔧 Repository Setup (For Project Owner/Lead)
+
+**⚠️ Do this ONCE before team starts development**
+
+### 1. Create `develop` Branch
+
+```bash
+# From main branch
+git checkout main
+git pull origin main
+
+# Create develop branch
+git checkout -b develop
+git push -u origin develop
+```
+
+### 2. Set Up Branch Protection on GitHub
+
+Go to: **GitHub → Repository → Settings → Branches → Add Rule**
+
+**Protect `main` branch:**
+- Branch name pattern: `main`
+- ✅ Require pull request before merging
+- ✅ Require 1 approval
+- ✅ Require status checks to pass (CI tests)
+- ✅ Require conversation resolution
+- ✅ Include administrators (recommended)
+
+**Protect `develop` branch:**
+- Branch name pattern: `develop`
+- ✅ Require pull request before merging
+- ✅ Require 1 approval
+- ✅ Require status checks to pass
+
+### 3. Set Default Branch to `develop`
+
+Go to: **GitHub → Settings → General → Default branch**
+- Change from `main` to `develop`
+- Click "Update" and confirm
+
+**Why?** When teammates clone, they'll start on `develop` automatically.
+
+### 4. Add Team Members
+
+Go to: **GitHub → Settings → Collaborators**
+- Add team members
+- Give them **Write** access
+
+### 5. Create Initial Issues/Tasks (Optional)
+
+Go to: **GitHub → Issues**
+- Create issues for features you need to build
+- Label them: `enhancement`, `bug`, `documentation`
+- Assign to team members
+
+### 6. Enable GitHub Actions (Already Done)
+
+Your `.github/workflows/ci.yml` is already set up! ✅
+- Runs tests on every push
+- Tests on multiple OS and Python versions
+
+---
+
 ## 🌳 Branch Strategy
 
 ### Branch Types
