@@ -1,12 +1,24 @@
 # Team Development Workflow - CS-555 Expense Splitter
 
-## 🎯 Quick Overview
+## 🎯 Quick Start
 
-- We follow **Test-Driven Development (TDD)**
-- All code must pass **CI/CD checks** before merging
-- **Never commit directly to `main`**
-- Use **Pull Requests** for all changes
-- Aim for **80%+ test coverage**
+**The 9-Step Process:**
+
+1. **Pick a ticket** (full-stack feature)
+2. **Write backend test** (TDD - test first!)
+3. **Implement backend** (make test pass)
+4. **Build frontend UI** (keep it simple)
+5. **Test end-to-end** (open browser, test manually)
+6. **Take screenshots** (if you changed UI)
+7. **Create ONE PR** (backend + frontend together)
+8. **Get review** (wait for approval)
+9. **Merge!** (squash and merge)
+
+**Key Rules:**
+- Never commit directly to `main`
+- All tests must pass (80%+ coverage)
+- Use conventional commits (`feat:`, `fix:`, etc.)
+- Include screenshots if UI changed
 
 ---
 
@@ -88,85 +100,114 @@ git push origin feature/add-expense-categories
 
 ---
 
-## 🔄 Daily Development Workflow
+## 🔄 Development Workflow (Full-Stack)
 
-### Morning Routine
+### Step-by-Step Process
 
-- [ ] Pull latest changes from `develop`
-  ```bash
-  git checkout develop
-  git pull origin develop
-  ```
+When you pick up a ticket, follow these steps:
 
-- [ ] Create or switch to your feature branch
-  ```bash
-  git checkout -b feature/my-feature
-  # or
-  git checkout feature/my-feature
-  ```
+#### 1. Pick a Ticket (Full-Stack Feature)
+- Choose a task from the project board
+- Understand what needs to be done (backend + frontend)
 
-- [ ] Rebase on latest develop (if needed)
-  ```bash
-  git rebase develop
-  ```
-
-### Development Cycle (TDD Approach)
-
-#### Step 1: Write Test First
+#### 2. Write Backend Test (TDD)
 - Open `tests/test_models.py` or `tests/test_routes.py`
-- Write a test for the feature you're about to build
+- Write a test for the backend functionality
 - Test should **fail** initially (Red phase)
 
 Example:
 ```python
-def test_expense_with_category(app):
-    """Test that Expense model can store category."""
+def test_delete_expense(client):
+    """Test that expense can be deleted."""
     # Arrange
-    expense = Expense(
-        description="Lunch",
-        amount=15.50,
-        payer="Alice",
-        participants="Alice, Bob",
-        category="Food"
-    )
-    
-    # Act
+    expense = Expense(description="Test", amount=10, payer="Alice")
     db.session.add(expense)
     db.session.commit()
     
+    # Act
+    response = client.post(f'/expense/{expense.id}/delete')
+    
     # Assert
-    stored = Expense.query.first()
-    assert stored.category == "Food"
+    assert response.status_code == 302  # Redirect
+    assert Expense.query.get(expense.id) is None
 ```
 
-#### Step 2: Run Test (Should Fail)
+Run test (should fail):
 ```bash
-uv run pytest tests/test_models.py::test_expense_with_category -v
+uv run pytest tests/test_routes.py::test_delete_expense -v
 ```
 
-#### Step 3: Write Minimum Code to Pass Test
-- Implement the feature in `app.py`, `models.py`, or templates
-- Write only enough code to make the test pass (Green phase)
+#### 3. Implement Backend Code
+- Write the backend code in `app.py` or `models.py`
+- Make the test pass (Green phase)
 
-#### Step 4: Run Test Again (Should Pass)
+Example:
+```python
+@app.route('/expense/<int:expense_id>/delete', methods=['POST'])
+def delete_expense(expense_id):
+    """Delete an expense by ID."""
+    expense = Expense.query.get_or_404(expense_id)
+    db.session.delete(expense)
+    db.session.commit()
+    return redirect(url_for('expense_splitter'))
+```
+
+Run test again (should pass):
 ```bash
-uv run pytest tests/test_models.py::test_expense_with_category -v
+uv run pytest tests/test_routes.py::test_delete_expense -v
 ```
 
-#### Step 5: Refactor
-- Clean up code
-- Remove duplication
-- Improve readability
-- Run tests again to ensure nothing broke
+#### 4. Build Frontend UI
+- Update the HTML templates to add/modify UI
+- Keep it **simple** - just build on what exists
+- Add basic styling if needed
+- Add JavaScript if you need interactivity
 
-#### Step 6: Repeat
-- Write next test
-- Make it pass
-- Refactor
+Example:
+```html
+<!-- Add a delete button to the expense card -->
+<form action="{{ url_for('delete_expense', expense_id=expense.id) }}" method="POST" style="display:inline;">
+    <button type="submit" onclick="return confirm('Delete this expense?')">
+        Delete
+    </button>
+</form>
+```
 
-### Before Every Commit
+#### 5. Test End-to-End
+- Start the app: `uv run python app.py`
+- Open in browser: http://localhost:5000
+- Test your feature manually:
+  - Does it work?
+  - Any errors in console? (F12 → Console tab)
+  - Does it look okay?
 
-Run these checks in order:
+#### 6. Take Screenshots
+- Take a screenshot showing your feature working
+- If you changed the UI, show before/after
+- Use Windows Snipping Tool: `Win+Shift+S`
+
+#### 7. Create ONE PR with Everything
+- Your PR includes:
+  - Backend code ✅
+  - Backend tests ✅
+  - Frontend UI ✅
+  - Screenshots (if UI changed) ✅
+
+#### 8. Get Review
+- Wait for teammate to review
+- Address feedback if any
+- Make changes if requested
+
+#### 9. Merge!
+- Once approved and CI passes
+- Squash and merge to main
+- Delete your feature branch
+
+---
+
+## 📝 Before Every Commit
+
+Run these checks:
 
 ```bash
 # 1. Format code
@@ -178,29 +219,29 @@ uv run ruff check .
 # 3. Run all tests
 uv run pytest -v
 
-# 4. Check test coverage
+# 4. Check test coverage (should be 80%+)
 uv run pytest --cov=. --cov-report=term
-
-# 5. Security scan (optional but recommended)
-uv run bandit -r .
 ```
+
+All green? ✅ You're ready to commit!
 
 ### Committing Changes
 
-- [ ] Use conventional commit messages
-  ```bash
-  git add .
-  git commit -m "feat: add expense category feature"
-  ```
+Use conventional commit messages:
 
-- [ ] Commit message format:
-  - `feat:` - New feature
-  - `fix:` - Bug fix
-  - `test:` - Adding tests
-  - `docs:` - Documentation changes
-  - `refactor:` - Code refactoring
-  - `style:` - Code formatting
-  - `chore:` - Maintenance tasks
+```bash
+git add .
+git commit -m "feat: add delete expense button"
+```
+
+**Commit message format:**
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `test:` - Adding tests
+- `docs:` - Documentation
+- `refactor:` - Code cleanup
+- `style:` - Formatting
+- `chore:` - Maintenance
 
 ### Pushing Changes
 
@@ -211,13 +252,20 @@ git push origin feature/my-feature
 
 ### End of Day
 
-- [ ] Commit your work (even if incomplete)
-- [ ] Push to remote for backup
-- [ ] Update task status on project board
-
 ---
 
 ## 🔍 Pull Request Process
+
+### Before Creating PR
+
+Make sure you've done these:
+
+- [ ] All tests pass: `uv run pytest -v`
+- [ ] Code formatted: `uv run ruff format .`
+- [ ] No linting errors: `uv run ruff check .`
+- [ ] Coverage is 80%+: `uv run pytest --cov=.`
+- [ ] Tested the feature manually in browser
+- [ ] Screenshots ready (if you changed UI)
 
 ### Creating a Pull Request
 
@@ -226,54 +274,44 @@ git push origin feature/my-feature
    git push origin feature/my-feature
    ```
 
-2. **Go to GitHub repository**
+2. **Go to GitHub**
    - Click "Pull Requests" tab
    - Click "New Pull Request"
 
-3. **Fill out PR template**
-   - **Title**: Clear, descriptive title
-   - **Description**: What does this PR do?
-   - **Testing**: How did you test it?
-   - **Screenshots**: If UI changes
+3. **Fill out PR description**
+   
+   Use this template:
 
-4. **PR Checklist**
-   - [ ] Tests added for new functionality
-   - [ ] All tests pass locally
-   - [ ] Code formatted with Ruff
-   - [ ] No linting errors
-   - [ ] Documentation updated
-   - [ ] No commented-out code
-   - [ ] Database migrations included (if applicable)
+   ```markdown
+   ## Description
+   Brief description of what this PR does
+   
+   ## Changes
+   - Added delete expense functionality
+   - Added tests for delete endpoint
+   - Added delete button to UI
+   
+   ## Testing
+   - All tests pass ✅
+   - Tested manually in browser ✅
+   - Coverage: 85%
+   
+   ## Screenshots
+   [Paste screenshot here if UI changed]
+   ```
 
-### Example PR Description
+4. **Submit & Wait**
+   - GitHub Actions CI will automatically:
+     - ✅ Run all tests on multiple OS
+     - ✅ Check code formatting
+     - ✅ Run security scans
+     - ✅ Generate coverage reports
+   
+   - Wait for teammate to review
+   - Address any feedback
+   - Once approved + CI passes → Merge!
 
-```markdown
-## Description
-Adds expense category feature allowing users to categorize expenses (Food, Transport, Entertainment, etc.)
-
-## Changes
-- Added `category` field to Expense model
-- Updated expense form to include category dropdown
-- Added tests for category functionality
-- Updated documentation
-
-## Testing
-- Added 5 new unit tests (all passing)
-- Tested manually on all expense pages
-- Test coverage: 85%
-
-## Screenshots
-[Attach screenshots if UI changed]
-```
-
-### After Creating PR
-
-- **GitHub Actions CI will automatically**:
-  - ✅ Run all tests on 3 operating systems
-  - ✅ Check code formatting
-  - ✅ Run security scans
-  - ✅ Generate coverage reports
-  - ✅ Verify app builds
+---
 
 - **Wait for**:
   - All CI checks to pass (green checkmarks)
@@ -418,58 +456,43 @@ def test_example(client):
 
 ### As a Reviewer
 
-#### What to Check
+Check these things:
 
 - [ ] **Tests**: Are tests included and passing?
-- [ ] **Coverage**: Does coverage meet 80% minimum?
-- [ ] **Functionality**: Does the code do what it claims?
-- [ ] **Style**: Does code follow Ruff style guide?
-- [ ] **Security**: Any security vulnerabilities?
-- [ ] **Performance**: Any performance issues?
-- [ ] **Documentation**: Is code well-documented?
-- [ ] **Database**: Are database queries optimized?
-- [ ] **Error Handling**: Are errors handled properly?
+- [ ] **Coverage**: Does coverage meet 80%+?
+- [ ] **Functionality**: Does the code actually work?
+- [ ] **Style**: Is code formatted properly?
+- [ ] **Security**: Any obvious security issues?
+- [ ] **Error Handling**: Are errors handled?
+- [ ] **Screenshots**: If UI changed, are screenshots included?
 
-#### Review Comment Types
-
-Use these labels:
+**Leave helpful comments:**
 
 - **🚫 BLOCKING**: Must fix before merge
-  ```markdown
-  🚫 BLOCKING: Security vulnerability on line 45
-  ```
-
-- **💡 SUGGESTION**: Nice to have but not required
-  ```markdown
-  💡 SUGGESTION: Consider extracting this into a helper function
-  ```
-
+- **💡 SUGGESTION**: Nice to have
 - **❓ QUESTION**: Need clarification
-  ```markdown
-  ❓ QUESTION: Why did you choose this approach over X?
-  ```
+- **✨ PRAISE**: Good work!
 
-- **✨ PRAISE**: Positive feedback
-  ```markdown
-  ✨ PRAISE: Great test coverage!
-  ```
+Example:
+```markdown
+🚫 BLOCKING: This will fail if expense is None. Add error handling.
 
-#### Review Turnaround Time
+💡 SUGGESTION: Consider using a constant for this value.
 
-- Small PRs (< 100 lines): Within 4 hours
-- Medium PRs (100-500 lines): Within 1 day
-- Large PRs (> 500 lines): Within 2 days
+✨ PRAISE: Great test coverage!
+```
 
 ### As an Author
 
-#### Responding to Reviews
+When you get review feedback:
 
-- [ ] Read all comments carefully
+- [ ] Read all comments
 - [ ] Respond to every comment
-- [ ] Make requested changes promptly
-- [ ] Mark conversations as resolved after fixing
-- [ ] Thank reviewers for their time
+- [ ] Make requested changes
+- [ ] Mark conversations as resolved
 - [ ] Request re-review after changes
+
+---
 
 #### If You Disagree
 
