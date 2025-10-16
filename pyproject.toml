@@ -7,7 +7,9 @@ requires-python = ">=3.9"
 dependencies = [
     "flask>=3.1.2",
     "flask-sqlalchemy>=3.1.1",
+    "flask-mail>=0.9.1",
     "pytest>=8.2",
+    "pytest-cov>=7.0.0",
 ]
 
 [project.optional-dependencies]
