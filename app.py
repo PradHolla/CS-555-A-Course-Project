@@ -1,68 +1,58 @@
-from flask import Flask, render_template, request, redirect, url_for
+"""Main Flask application with blueprint registration."""
+
 import os
 
-from extensions import db
+from flask import Flask
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+from extensions import db, mail
 
-db.init_app(app)
+# Import models to ensure they're registered with SQLAlchemy
+from models import Expense, User  # noqa: F401
 
-from models import Expense  # noqa: E402
 
-@app.route('/')
-def home():
-    return render_template('home/index.html', page_id='home')
+def create_app():
+    """Application factory pattern."""
+    app = Flask(__name__)
 
-@app.route('/expense-splitter', methods=['GET', 'POST'])
-def expense_splitter():
-    if request.method == 'POST':
-        description = request.form.get('description', '').strip()
-        amount_raw = request.form.get('amount', '').strip()
-        payer = request.form.get('payer', '').strip()
-        participants = request.form.get('participants', '').strip()
+    # Configuration
+    app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-        try:
-            amount = float(amount_raw)
-        except ValueError:
-            amount = None
+    # Email configuration (for development, we'll print to console)
+    app.config["MAIL_SERVER"] = "smtp.gmail.com"
+    app.config["MAIL_PORT"] = 587
+    app.config["MAIL_USE_TLS"] = True
+    app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "your-email@gmail.com")
+    app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "your-password")
+    app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "your-email@gmail.com")
+    app.config["MAIL_SUPPRESS_SEND"] = True  # Don't actually send emails in development
 
-        if description and amount is not None and payer:
-            expense = Expense(
-                description=description,
-                amount=amount,
-                payer=payer,
-                participants=participants or None
-            )
-            db.session.add(expense)
-            db.session.commit()
+    # Initialize extensions
+    db.init_app(app)
+    mail.init_app(app)
 
-        return redirect(url_for('expense_splitter'))
+    # Register blueprints
+    from routes.auth import auth_bp
+    from routes.expenses import expenses_bp
+    from routes.home import home_bp
 
-    expenses = Expense.query.order_by(Expense.created_at.desc()).all()
-    expense_views = []
-    for expense in expenses:
-        people = [p.strip() for p in (expense.participants or '').split(',') if p.strip()]
-        share = expense.amount / len(people) if people else None
-        expense_views.append({
-            'model': expense,
-            'participants': people,
-            'share': share
-        })
+    app.register_blueprint(home_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(expenses_bp)
 
-    return render_template(
-        'apps/expense_splitter/index.html',
-        page_id='expense-splitter',
-        expenses=expense_views
-    )
+    return app
 
-def init_db():
+
+def init_db(app):
+    """Initialize database tables."""
     with app.app_context():
         db.create_all()
 
-if __name__ == '__main__':
-    if not os.path.exists('app.db'):
-        init_db()
+
+# Create app instance
+app = create_app()
+
+if __name__ == "__main__":
+    init_db(app)  # Always ensure tables exist on startup
     app.run(debug=True)
