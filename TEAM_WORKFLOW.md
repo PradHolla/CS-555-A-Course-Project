@@ -126,6 +126,118 @@ Your `.github/workflows/ci.yml` is already set up! ✅
 
 ---
 
+## 📁 Project Architecture
+
+### Codebase Structure
+
+The project uses **Flask Blueprints** for clean separation of concerns:
+
+```
+CS-555-A-Course-Project/
+├── app.py                      # Main app (61 lines) - Blueprint registration only
+├── extensions.py               # Flask extensions (db, mail)
+├── models.py                   # Database models (User, Expense, etc.)
+├── routes/                     # Route blueprints (organized by feature)
+│   ├── __init__.py
+│   ├── home.py                 # Home page routes
+│   ├── auth.py                 # Authentication routes
+│   └── expenses.py             # Expense management routes
+├── services/                   # Business logic layer
+│   ├── __init__.py
+│   └── auth_service.py         # OTP generation, validation logic
+├── utils/                      # Reusable utilities
+│   ├── __init__.py
+│   └── decorators.py           # login_required, etc.
+├── templates/                  # HTML templates
+│   ├── base.html
+│   ├── home/
+│   ├── auth/
+│   └── apps/
+├── static/                     # CSS, JS, images
+└── tests/                      # Test files
+    ├── conftest.py
+    ├── test_models.py
+    └── test_routes.py
+```
+
+### Why Blueprints?
+
+**Benefits:**
+- ✅ **Organized by feature** - Easy to find code
+- ✅ **Team-friendly** - Multiple people can work without conflicts
+- ✅ **Scalable** - Add features without bloating files
+- ✅ **Testable** - Each blueprint can be tested independently
+- ✅ **Maintainable** - Small, focused files (10-100 lines each)
+
+### Where to Add Code
+
+| Task | Location | Example |
+|------|----------|---------|
+| New route for existing feature | `routes/<feature>.py` | Add delete route to `routes/expenses.py` |
+| New feature routes | Create `routes/new_feature.py` | Create `routes/groups.py` for groups |
+| Business logic | `services/<feature>_service.py` | OTP logic in `services/auth_service.py` |
+| Database model | `models.py` | Add Group model to `models.py` |
+| Reusable decorator | `utils/decorators.py` | Add `admin_required` decorator |
+| Template | `templates/<feature>/` | Add to `templates/auth/` |
+
+### Adding a New Feature
+
+**Example: Adding a "Groups" feature**
+
+1. **Create the blueprint** (`routes/groups.py`):
+```python
+from flask import Blueprint, render_template, request, redirect, url_for
+from utils.decorators import login_required
+from models import Group
+from extensions import db
+
+groups_bp = Blueprint('groups', __name__, url_prefix='/groups')
+
+@groups_bp.route('/')
+@login_required
+def list_groups():
+    """Display all groups."""
+    groups = Group.query.all()
+    return render_template('groups/index.html', groups=groups)
+
+@groups_bp.route('/create', methods=['POST'])
+@login_required
+def create_group():
+    """Create a new group."""
+    name = request.form.get('name')
+    group = Group(name=name)
+    db.session.add(group)
+    db.session.commit()
+    return redirect(url_for('groups.list_groups'))
+```
+
+2. **Register the blueprint** in `app.py`:
+```python
+# In the create_app() function, add:
+from routes.groups import groups_bp
+app.register_blueprint(groups_bp)
+```
+
+3. **Add the model** to `models.py`:
+```python
+class Group(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+```
+
+4. **Create templates** in `templates/groups/index.html`
+
+5. **Write tests** in `tests/test_routes.py`:
+```python
+def test_groups_list_returns_ok(client):
+    with client.session_transaction() as sess:
+        sess['user_id'] = 1
+    response = client.get('/groups/')
+    assert response.status_code == 200
+```
+
+---
+
 ## 🌳 Branch Strategy
 
 ### Branch Types
@@ -201,19 +313,26 @@ uv run pytest tests/test_routes.py::test_delete_expense -v
 ```
 
 #### 3. Implement Backend Code
-- Write the backend code in `app.py` or `models.py`
+- Write the backend code in the appropriate blueprint file
 - Make the test pass (Green phase)
 
-Example:
+**Example: Adding delete expense functionality**
+
+In `routes/expenses.py`:
 ```python
-@app.route('/expense/<int:expense_id>/delete', methods=['POST'])
+@expenses_bp.route('/expense/<int:expense_id>/delete', methods=['POST'])
+@login_required
 def delete_expense(expense_id):
     """Delete an expense by ID."""
     expense = Expense.query.get_or_404(expense_id)
     db.session.delete(expense)
     db.session.commit()
-    return redirect(url_for('expense_splitter'))
+    return redirect(url_for('expenses.expense_splitter'))
 ```
+
+**Note:** Blueprint endpoint names are prefixed with blueprint name:
+- `url_for('expense_splitter')` → `url_for('expenses.expense_splitter')`
+- `url_for('login')` → `url_for('auth.login')`
 
 Run test again (should pass):
 ```bash
@@ -229,12 +348,17 @@ uv run pytest tests/test_routes.py::test_delete_expense -v
 Example:
 ```html
 <!-- Add a delete button to the expense card -->
-<form action="{{ url_for('delete_expense', expense_id=expense.id) }}" method="POST" style="display:inline;">
+<form action="{{ url_for('expenses.delete_expense', expense_id=expense.id) }}" method="POST" style="display:inline;">
     <button type="submit" onclick="return confirm('Delete this expense?')">
         Delete
     </button>
 </form>
 ```
+
+**Remember:** Use blueprint-prefixed endpoint names in templates:
+- `url_for('expenses.expense_splitter')`
+- `url_for('auth.login')`
+- `url_for('home.index')`
 
 #### 5. Test End-to-End
 - Start the app: `uv run python app.py`
@@ -247,7 +371,6 @@ Example:
 #### 6. Take Screenshots
 - Take a screenshot showing your feature working
 - If you changed the UI, show before/after
-- Use Windows Snipping Tool: `Win+Shift+S`
 
 #### 7. Create ONE PR with Everything
 - Your PR includes:
@@ -409,8 +532,8 @@ Make sure you've done these:
 ### Minimum Coverage Targets
 
 - **Overall**: 80%+
-- **Models**: 90%+
-- **Routes**: 85%+
+- **Models**: 80%+
+- **Routes**: 80%+
 - **Critical logic** (calculations): 100%
 
 ### Test Types to Write
@@ -610,6 +733,139 @@ Changes:
 
 ---
 
+## 🎨 Blueprint Best Practices
+
+### File Organization
+
+**Keep blueprint files focused:**
+- ✅ **DO**: One blueprint per feature (`auth.py`, `expenses.py`, `groups.py`)
+- ❌ **DON'T**: Mix unrelated routes in one file
+- ✅ **DO**: Keep blueprints under 150 lines
+- ❌ **DON'T**: Create a giant 500-line blueprint file
+
+### Naming Conventions
+
+**Blueprint names should match their purpose:**
+```python
+# Good
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+expenses_bp = Blueprint('expenses', __name__)
+groups_bp = Blueprint('groups', __name__, url_prefix='/groups')
+
+# Bad  
+bp1 = Blueprint('stuff', __name__)
+my_routes = Blueprint('x', __name__)
+```
+
+### URL Prefixes
+
+**Use URL prefixes to group related routes:**
+```python
+# All auth routes will be under /auth/*
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+# /auth/login, /auth/logout, /auth/request-otp
+
+# All group routes will be under /groups/*
+groups_bp = Blueprint('groups', __name__, url_prefix='/groups')
+# /groups/, /groups/create, /groups/<id>/delete
+```
+
+### Endpoint References
+
+**Always use blueprint-prefixed endpoint names:**
+```python
+# In routes
+return redirect(url_for('auth.login'))  # ✅ Correct
+return redirect(url_for('login'))       # ❌ Wrong - will fail!
+
+# In templates
+{{ url_for('expenses.expense_splitter') }}  # ✅ Correct
+{{ url_for('expense_splitter') }}           # ❌ Wrong - will fail!
+```
+
+### Business Logic Separation
+
+**Keep routes thin, move logic to services:**
+```python
+# ❌ Bad - logic in route
+@expenses_bp.route('/split')
+def split_expense():
+    amount = float(request.form.get('amount'))
+    participants = request.form.get('participants').split(',')
+    share = amount / len(participants)  # Logic in route!
+    # ... more logic ...
+
+# ✅ Good - logic in service
+from services.expense_service import ExpenseService
+
+@expenses_bp.route('/split')
+def split_expense():
+    amount = float(request.form.get('amount'))
+    participants = request.form.get('participants').split(',')
+    split_data = ExpenseService.calculate_split(amount, participants)
+    return render_template('split.html', split=split_data)
+```
+
+### Import Organization
+
+**Order imports properly in blueprint files:**
+```python
+# 1. Standard library
+from datetime import datetime
+
+# 2. Third-party packages
+from flask import Blueprint, render_template, request
+
+# 3. Local application
+from extensions import db
+from models import Expense
+from services.expense_service import ExpenseService
+from utils.decorators import login_required
+```
+
+### Blueprint Registration
+
+**Register blueprints in logical order in `app.py`:**
+```python
+def create_app():
+    app = Flask(__name__)
+    # ... configuration ...
+    
+    # Register blueprints in order:
+    # 1. Core routes (home, about)
+    from routes.home import home_bp
+    app.register_blueprint(home_bp)
+    
+    # 2. Authentication
+    from routes.auth import auth_bp
+    app.register_blueprint(auth_bp)
+    
+    # 3. Feature routes
+    from routes.expenses import expenses_bp
+    from routes.groups import groups_bp
+    app.register_blueprint(expenses_bp)
+    app.register_blueprint(groups_bp)
+    
+    return app
+```
+
+### Error Handling
+
+**Handle errors within blueprints:**
+```python
+@expenses_bp.errorhandler(404)
+def expense_not_found(e):
+    """Handle 404 errors for expense routes."""
+    return render_template('errors/expense_404.html'), 404
+
+@expenses_bp.route('/<int:expense_id>')
+def view_expense(expense_id):
+    expense = Expense.query.get_or_404(expense_id)  # Auto 404
+    return render_template('expense_detail.html', expense=expense)
+```
+
+---
+
 ## 📝 Documentation Requirements
 
 ### Code Documentation
@@ -753,6 +1009,18 @@ uv run pytest --cov=. --cov-report=term
 uv run pytest -k "expense" -v
 ```
 
+### Blueprint Commands
+```bash
+# Create a new blueprint file
+# routes/new_feature.py
+
+# Test a specific blueprint's routes
+uv run pytest -k "new_feature" -v
+
+# Check which blueprints are registered
+uv run python -c "from app import app; print([bp.name for bp in app.blueprints.values()])"
+```
+
 ### Code Quality Commands
 ```bash
 # Format code
@@ -778,6 +1046,7 @@ uv run python app.py
 
 # Reset database
 Remove-Item instance\app.db  # Windows
+rm instance/app.db  # Linux/Mac
 uv run python -c "from app import app, db; app.app_context().push(); db.create_all()"
 ```
 
