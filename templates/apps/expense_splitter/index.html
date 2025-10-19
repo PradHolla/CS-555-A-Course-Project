@@ -41,10 +41,16 @@
 <div class="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 mb-8 border border-emerald-200">
     <div class="flex items-start gap-3">
         <span class="text-2xl">💡</span>
-        <div>
+        <div class="flex-1">
             <h3 class="font-semibold text-gray-900 mb-1">Tech-Forward Finance</h3>
             <p class="text-gray-600 text-sm">A sleek, professional expense tracker with a modern tech aesthetic. Perfect for hackathons, team projects, or any group financial management.</p>
         </div>
+        <a href="{{ url_for('expenses.balance_summary') }}" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium whitespace-nowrap flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+            View Balance
+        </a>
     </div>
 </div>
 
