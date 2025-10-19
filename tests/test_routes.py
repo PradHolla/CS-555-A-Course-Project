@@ -326,3 +326,29 @@ def test_balance_summary_requires_login(client):
     # Assert
     assert response.status_code == 302
     assert "/auth/login" in response.location
+
+
+def test_balance_summary_handles_expense_with_no_participants(client, app):
+    """Test that balance summary correctly handles expenses with empty participants."""
+    # Arrange
+    from extensions import db
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    # Create expense with no participants (edge case)
+    expense1 = Expense(description="Orphan expense", amount=50.0, payer="Alice", participants=None)
+    # Create normal expense
+    expense2 = Expense(description="Lunch", amount=30.0, payer="Bob", participants="Alice, Bob")
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    # Act
+    response = client.get("/balance-summary")
+
+    # Assert
+    assert response.status_code == 200
+    # The orphan expense should be skipped, only the valid expense should be calculated
+    assert b"Bob" in response.data
+    assert b"Alice" in response.data
