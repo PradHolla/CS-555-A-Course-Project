@@ -38,3 +38,9 @@ class Expense(db.Model):
     payer = db.Column(db.String(100), nullable=False)
     participants = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Group(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    members = db.Column(db.String(256), nullable=False)
+

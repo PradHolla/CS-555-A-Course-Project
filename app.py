@@ -41,6 +41,9 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(expenses_bp)
 
+    from routes.groups import groups_bp
+    app.register_blueprint(groups_bp)
+
     return app
 
 

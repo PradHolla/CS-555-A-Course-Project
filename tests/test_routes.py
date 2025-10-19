@@ -1,4 +1,4 @@
-from models import Expense, User
+from models import Expense, User, Group
 
 # === Authentication Route Tests ===
 
@@ -229,3 +229,31 @@ def test_expense_splitter_rejects_invalid_amount(client):
     # Assert
     assert response.status_code == 302
     assert Expense.query.count() == 0
+
+def test_groups_list_returns_ok(client):
+    with client.session_transaction() as sess:
+        sess['user_id'] = 1
+    response = client.get('/groups/')
+    assert response.status_code == 200
+
+def test_groups_create_group_with_members(client):
+    """Test that POST /groups creates a new group in the database."""
+    # Arrange
+    # Create a logged-in user session
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    group_data = {
+        "name": "My Agile group",
+        "members": "Anikait, Sairithik, Pradhyumna",
+    }
+
+    # Act
+    response = client.post("/groups/create", data=group_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+    stored = Group.query.filter_by(name="My Agile group").first()
+    assert stored is not None
+    assert stored.members == "Anikait, Sairithik, Pradhyumna"
