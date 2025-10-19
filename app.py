@@ -8,7 +8,7 @@ from flask import Flask
 from extensions import db, mail
 
 # Import models to ensure they're registered with SQLAlchemy
-from models import Expense, User  # noqa: F401
+from models import Expense, User, Settlement  # noqa: F401
 
 # Load environment variables from .env file
 load_dotenv()
@@ -40,10 +40,12 @@ def create_app():
     from routes.auth import auth_bp
     from routes.expenses import expenses_bp
     from routes.home import home_bp
+    from routes.settlements import settlements_bp
 
     app.register_blueprint(home_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(expenses_bp)         
+    app.register_blueprint(expenses_bp)
+    app.register_blueprint(settlements_bp)         
 
     return app
 

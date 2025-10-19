@@ -5,6 +5,7 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 from extensions import db
 from models import Expense, User
 from services.notification_service import notify_expense_participants
+from services.expense_service import ExpenseService
 from utils.decorators import login_required
 
 expenses_bp = Blueprint("expenses", __name__)
