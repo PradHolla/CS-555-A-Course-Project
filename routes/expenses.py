@@ -1,9 +1,10 @@
 """Expense management routes blueprint."""
 
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from extensions import db
-from models import Expense
+from models import Expense, User
+from services.notification_service import notify_expense_participants
 from utils.decorators import login_required
 
 expenses_bp = Blueprint("expenses", __name__)
@@ -33,6 +34,18 @@ def expense_splitter():
             )
             db.session.add(expense)
             db.session.commit()
+            
+            # Send email notifications to participants
+            if participants:
+                # Extract email addresses from participants field
+                participant_emails = [p.strip() for p in participants.split(",") if p.strip()]
+                
+                if participant_emails:
+                    try:
+                        notify_expense_participants(expense, participant_emails)
+                        print(f"Sent notifications to: {participant_emails}")
+                    except Exception as e:
+                        print(f"Failed to send notifications: {e}")
 
         return redirect(url_for("expenses.expense_splitter"))
 
