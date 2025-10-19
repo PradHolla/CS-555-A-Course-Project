@@ -186,9 +186,16 @@ def test_expense_splitter_get_returns_ok(client):
     assert response.status_code == 200
 
 
-def test_expense_splitter_post_creates_expense(client):
+def test_expense_splitter_post_creates_expense(client, app):
     """Test that POST /expense-splitter creates a new expense in the database."""
     # Arrange
+    from extensions import db
+    
+    # Create a group first
+    group = Group(name="Test Group", members="Alex, Sam, Jo")
+    db.session.add(group)
+    db.session.commit()
+    
     # Create a logged-in user session
     with client.session_transaction() as session:
         session["user_id"] = 1
@@ -198,7 +205,9 @@ def test_expense_splitter_post_creates_expense(client):
         "description": "Dinner",
         "amount": "36.75",
         "payer": "Alex",
-        "participants": "Alex, Sam, Jo",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["Alex", "Sam", "Jo"]
     }
 
     # Act
@@ -210,7 +219,8 @@ def test_expense_splitter_post_creates_expense(client):
     assert stored is not None
     assert stored.amount == 36.75
     assert stored.payer == "Alex"
-    assert stored.participants == "Alex, Sam, Jo"
+    assert stored.group_id == group.id
+    assert stored.split_type == "equal"
 
 
 def test_expense_splitter_rejects_invalid_amount(client):
@@ -375,3 +385,369 @@ def test_balance_summary_handles_expense_with_no_participants(client, app):
     # The orphan expense should be skipped, only the valid expense should be calculated
     assert b"Bob" in response.data
     assert b"Alice" in response.data
+
+
+# === New Group-Based Expense Tests ===
+
+
+def test_expense_splitter_requires_group_selection(client, app):
+    """Test that expense creation requires group selection."""
+    # Arrange
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "50.00",
+        "payer": "Alice",
+        "group_id": "",  # Empty group
+        "split_type": "equal",
+        "participants": ["Alice", "Bob"]
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect back to form
+    assert Expense.query.count() == 0
+
+
+def test_expense_splitter_rejects_zero_amount(client, app):
+    """Test that expense creation rejects zero amount."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "0.00",  # Zero amount
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["Alice", "Bob"]
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect back to form
+    assert Expense.query.count() == 0
+
+
+def test_expense_splitter_rejects_negative_amount(client, app):
+    """Test that expense creation rejects negative amount."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "-10.00",  # Negative amount
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["Alice", "Bob"]
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect back to form
+    assert Expense.query.count() == 0
+
+
+def test_expense_splitter_validates_payer_in_group(client, app):
+    """Test that payer must be a member of the selected group."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "50.00",
+        "payer": "Charlie",  # Not in group
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["Alice", "Bob"]
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect back to form
+    assert Expense.query.count() == 0
+
+
+def test_expense_splitter_validates_participants_in_group(client, app):
+    """Test that participants must be members of the selected group."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "50.00",
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["Alice", "Charlie"]  # Charlie not in group
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect back to form
+    assert Expense.query.count() == 0
+
+
+def test_expense_splitter_creates_equal_split_expense(client, app):
+    """Test creating expense with equal split."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob, Charlie")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "60.00",
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["Alice", "Bob", "Charlie"]
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect after success
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.description == "Dinner"
+    assert stored.amount == 60.0
+    assert stored.payer == "Alice"
+    assert stored.group_id == group.id
+    assert stored.split_type == "equal"
+    
+    # Check split details
+    import json
+    split_details = json.loads(stored.split_details)
+    assert split_details["Alice"] == 20.0
+    assert split_details["Bob"] == 20.0
+    assert split_details["Charlie"] == 20.0
+
+
+def test_expense_splitter_creates_custom_split_expense(client, app):
+    """Test creating expense with custom split."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob, Charlie")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "60.00",
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "custom",
+        "custom_amount_Alice": "30.00",
+        "custom_amount_Bob": "20.00",
+        "custom_amount_Charlie": "10.00"
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect after success
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.split_type == "custom"
+    
+    # Check split details
+    import json
+    split_details = json.loads(stored.split_details)
+    assert split_details["Alice"] == 30.0
+    assert split_details["Bob"] == 20.0
+    assert split_details["Charlie"] == 10.0
+
+
+def test_expense_splitter_rejects_custom_split_mismatch(client, app):
+    """Test that custom split amounts must equal total amount."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "50.00",
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "custom",
+        "custom_amount_Alice": "30.00",
+        "custom_amount_Bob": "20.00"  # Total = 50, should be valid
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Should succeed
+    assert Expense.query.count() == 1
+
+
+def test_expense_splitter_rejects_custom_split_total_mismatch(client, app):
+    """Test that custom split with wrong total is rejected."""
+    # Arrange
+    from extensions import db
+    
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "50.00",
+        "payer": "Alice",
+        "group_id": str(group.id),
+        "split_type": "custom",
+        "custom_amount_Alice": "30.00",
+        "custom_amount_Bob": "30.00"  # Total = 60, should be rejected
+    }
+
+    # Act
+    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect back to form
+    assert Expense.query.count() == 0
+
+
+def test_expense_splitter_filters_by_group(client, app):
+    """Test that expenses can be filtered by group."""
+    # Arrange
+    from extensions import db
+    
+    group1 = Group(name="Group 1", members="Alice, Bob")
+    group2 = Group(name="Group 2", members="Charlie, Dave")
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    # Create expenses for both groups
+    expense1 = Expense(
+        description="Lunch 1", amount=20.0, payer="Alice", 
+        group_id=group1.id, split_type="equal", split_details='{"Alice": 10.0, "Bob": 10.0}'
+    )
+    expense2 = Expense(
+        description="Lunch 2", amount=40.0, payer="Charlie", 
+        group_id=group2.id, split_type="equal", split_details='{"Charlie": 20.0, "Dave": 20.0}'
+    )
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    # Act
+    response = client.get(f"/expense-splitter?group_id={group1.id}")
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Lunch 1" in response.data
+    assert b"Lunch 2" not in response.data
+
+
+def test_balance_summary_filters_by_group(client, app):
+    """Test that balance summary can be filtered by group."""
+    # Arrange
+    from extensions import db
+    
+    group1 = Group(name="Group 1", members="Alice, Bob")
+    group2 = Group(name="Group 2", members="Charlie, Dave")
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    # Create expenses for both groups
+    expense1 = Expense(
+        description="Lunch 1", amount=20.0, payer="Alice", 
+        group_id=group1.id, split_type="equal", split_details='{"Alice": 10.0, "Bob": 10.0}'
+    )
+    expense2 = Expense(
+        description="Lunch 2", amount=40.0, payer="Charlie", 
+        group_id=group2.id, split_type="equal", split_details='{"Charlie": 20.0, "Dave": 20.0}'
+    )
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    # Act
+    response = client.get(f"/balance-summary?group_id={group1.id}")
+
+    # Assert
+    assert response.status_code == 200
+    # Should only show balances for Group 1 members
+    assert b"Alice" in response.data
+    assert b"Bob" in response.data
+    assert b"Charlie" not in response.data
+    assert b"Dave" not in response.data

@@ -1,5 +1,6 @@
 """Business logic for expense calculations and balance summaries."""
 
+import json
 from collections import defaultdict
 
 
@@ -13,26 +14,17 @@ class ExpenseService:
 
         This function:
         1. Calculates how much each person paid
-        2. Calculates how much each person should pay (equal split)
+        2. Calculates how much each person should pay (based on split_details)
         3. Determines the net balance (what they paid - what they should pay)
 
         Args:
-            expenses: List of Expense model objects with amount, payer, and participants fields
+            expenses: List of Expense model objects with amount, payer, and split_details fields
 
         Returns:
             Dictionary with:
             - 'balances': dict mapping person name to their net balance
               (positive = owed money, negative = owes money)
             - 'transactions': list of simplified payment transactions
-
-        Example:
-            expenses = [
-                Expense(amount=30, payer="Alice", participants="Alice, Bob, Charlie"),
-                Expense(amount=60, payer="Bob", participants="Alice, Bob, Charlie")
-            ]
-            result = ExpenseService.calculate_balances(expenses)
-            # result['balances'] = {'Alice': -10, 'Bob': 10, 'Charlie': -20}
-            # Alice owes $10, Bob is owed $10, Charlie owes $20
         """
         if not expenses:
             return {"balances": {}, "transactions": []}
@@ -43,19 +35,18 @@ class ExpenseService:
         should_pay = defaultdict(float)
 
         for expense in expenses:
-            # Parse participants
-            participants = [p.strip() for p in (expense.participants or "").split(",") if p.strip()]
-
-            if not participants:
-                continue
-
             # The payer paid the full amount
             paid[expense.payer] += expense.amount
 
-            # Each participant should pay their share
-            share = expense.amount / len(participants)
-            for participant in participants:
-                should_pay[participant] += share
+            # Parse split details
+            split_details = ExpenseService._parse_split_details(expense)
+            
+            if not split_details:
+                continue
+
+            # Each participant should pay their share based on split_details
+            for participant, amount in split_details.items():
+                should_pay[participant] += amount
 
         # Calculate net balance for each person
         all_people = set(paid.keys()) | set(should_pay.keys())
@@ -123,3 +114,71 @@ class ExpenseService:
                 j += 1
 
         return transactions
+
+    @staticmethod
+    def _parse_split_details(expense):
+        """
+        Parse split details from expense, handling both old and new formats.
+        
+        Args:
+            expense: Expense model object
+            
+        Returns:
+            Dictionary mapping participant names to their share amounts
+        """
+        # Try new format first (split_details JSON)
+        if expense.split_details:
+            try:
+                return json.loads(expense.split_details)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        # Fall back to old format (participants text field)
+        if expense.participants:
+            participants = [p.strip() for p in expense.participants.split(",") if p.strip()]
+            if participants:
+                share = expense.amount / len(participants)
+                return {participant: share for participant in participants}
+        
+        return {}
+
+    @staticmethod
+    def validate_custom_split(split_details, total_amount):
+        """
+        Validate that custom split amounts sum to the total amount.
+        
+        Args:
+            split_details: Dictionary mapping participant names to amounts
+            total_amount: Total expense amount
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not split_details:
+            return False, "No participants specified"
+        
+        total_split = sum(split_details.values())
+        tolerance = 0.01  # Allow small floating point differences
+        
+        if abs(total_split - total_amount) > tolerance:
+            return False, f"Split amounts ({total_split:.2f}) must equal total amount ({total_amount:.2f})"
+        
+        return True, None
+
+    @staticmethod
+    def calculate_equal_split(participants, total_amount):
+        """
+        Calculate equal split for given participants.
+        
+        Args:
+            participants: List of participant names
+            total_amount: Total expense amount
+            
+        Returns:
+            Dictionary mapping participant names to their equal share
+        """
+        if not participants:
+            return {}
+        
+        share = total_amount / len(participants)
+        return {participant: share for participant in participants}
