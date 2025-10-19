@@ -4,6 +4,7 @@ from flask import Blueprint, redirect, render_template, request, url_for
 
 from extensions import db
 from models import Expense
+from services.expense_service import ExpenseService
 from utils.decorators import login_required
 
 expenses_bp = Blueprint("expenses", __name__)
@@ -45,4 +46,22 @@ def expense_splitter():
 
     return render_template(
         "apps/expense_splitter/index.html", page_id="expense-splitter", expenses=expense_views
+    )
+
+
+@expenses_bp.route("/balance-summary", methods=["GET"])
+@login_required
+def balance_summary():
+    """Display balance summary showing who owes whom across all expenses."""
+    # Get all expenses from the database
+    expenses = Expense.query.all()
+
+    # Calculate balances using the service
+    balance_data = ExpenseService.calculate_balances(expenses)
+
+    return render_template(
+        "apps/expense_splitter/balance.html",
+        page_id="balance-summary",
+        balances=balance_data["balances"],
+        transactions=balance_data["transactions"],
     )
