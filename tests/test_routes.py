@@ -751,3 +751,273 @@ def test_balance_summary_filters_by_group(client, app):
     assert b"Bob" in response.data
     assert b"Charlie" not in response.data
     assert b"Dave" not in response.data
+
+def test_missing_description(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "",  # Missing
+        "amount": "100",
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_missing_group(client):
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "100",
+        "payer": "alice",
+        "group_id": "",  # Missing
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_missing_payer(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "100",
+        "payer": "",  # Missing
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_invalid_amount_nonpositive(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "0",  # Or negative
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_invalid_amount_type(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "abc",  # Not a number
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_group_not_found(client):
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "50",
+        "payer": "alice",
+        "group_id": "99999",  # Nonexistent group
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_payer_not_in_group(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "50",
+        "payer": "notamember",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["alice"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_no_participants_selected(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "100",
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": []  # Empty list
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_participant_not_in_group(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "100",
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "equal",
+        "participants": ["alice", "notamember"]
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_invalid_custom_amount(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    # Assume group members: alice, bob
+    data = {
+        "description": "Trip",
+        "amount": "100",
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "custom",
+        "custom_amount_alice": "abc",  # Invalid
+        "custom_amount_bob": "60"
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_no_custom_split_details(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    # No amounts for any member
+    data = {
+        "description": "Trip",
+        "amount": "100",
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "custom",
+        "custom_amount_alice": "",
+        "custom_amount_bob": ""
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
+
+def test_invalid_custom_split_sum(client, app):
+    from extensions import db
+
+    group = Group(name="Fixture Group", members="alice, bob")
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    data = {
+        "description": "Trip",
+        "amount": "90",
+        "payer": "alice",
+        "group_id": str(group.id),
+        "split_type": "custom",
+        "custom_amount_alice": "30",
+        "custom_amount_bob": "40"
+        # Adds up to 70, not 90
+    }
+    resp = client.post("/expense-splitter", data=data, follow_redirects=False)
+    assert resp.status_code == 302
+    assert Expense.query.count() == 0
