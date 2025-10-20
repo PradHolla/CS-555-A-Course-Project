@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from extensions import db
-from models import Expense, User
+from models import Expense, User, Group
 
 # === User Model Tests ===
 
@@ -153,3 +153,146 @@ def test_expense_requires_description(app):
         db.session.commit()
 
     db.session.rollback()
+
+
+# === Group Model Tests ===
+
+
+def test_group_create_and_persist(app):
+    """Test that Group model can be created and persisted to the database."""
+    # Arrange
+    group = Group(name="Team Alpha", members="Alice, Bob, Charlie")
+
+    # Act
+    db.session.add(group)
+    db.session.commit()
+
+    # Assert
+    stored = Group.query.first()
+    assert stored is not None
+    assert stored.name == "Team Alpha"
+    assert stored.members == "Alice, Bob, Charlie"
+
+
+def test_group_requires_name(app):
+    """Test that Group model raises IntegrityError when name is None."""
+    # Arrange
+    group = Group(name=None, members="Alice, Bob")
+    db.session.add(group)
+
+    # Act & Assert
+    with pytest.raises(IntegrityError):
+        db.session.commit()
+
+    db.session.rollback()
+
+
+# === Expense-Group Relationship Tests ===
+
+
+def test_expense_group_relationship(app):
+    """Test that Expense can be associated with a Group."""
+    # Arrange
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+    
+    expense = Expense(
+        description="Lunch", 
+        amount=30.0, 
+        payer="Alice",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"Alice": 15.0, "Bob": 15.0}'
+    )
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored_expense = Expense.query.first()
+    assert stored_expense.group_id == group.id
+    assert stored_expense.group == group
+    assert expense in group.expenses
+
+
+def test_expense_split_details_json_storage(app):
+    """Test that split_details can store and retrieve JSON data."""
+    # Arrange
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+    
+    split_details = {"Alice": 20.0, "Bob": 10.0}
+    expense = Expense(
+        description="Dinner", 
+        amount=30.0, 
+        payer="Alice",
+        group_id=group.id,
+        split_type="custom",
+        split_details='{"Alice": 20.0, "Bob": 10.0}'
+    )
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored_expense = Expense.query.first()
+    assert stored_expense.split_details == '{"Alice": 20.0, "Bob": 10.0}'
+    assert stored_expense.split_type == "custom"
+
+
+def test_expense_default_split_type(app):
+    """Test that Expense defaults to 'equal' split_type."""
+    # Arrange
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+    
+    expense = Expense(
+        description="Lunch", 
+        amount=20.0, 
+        payer="Alice",
+        group_id=group.id
+    )
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored_expense = Expense.query.first()
+    assert stored_expense.split_type == "equal"
+
+
+def test_group_expenses_backref(app):
+    """Test that Group.expenses backref works correctly."""
+    # Arrange
+    group = Group(name="Test Group", members="Alice, Bob")
+    db.session.add(group)
+    db.session.commit()
+    
+    expense1 = Expense(
+        description="Lunch", 
+        amount=20.0, 
+        payer="Alice",
+        group_id=group.id
+    )
+    expense2 = Expense(
+        description="Dinner", 
+        amount=40.0, 
+        payer="Bob",
+        group_id=group.id
+    )
+
+    # Act
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    # Assert
+    stored_group = Group.query.first()
+    assert len(stored_group.expenses) == 2
+    assert expense1 in stored_group.expenses
+    assert expense2 in stored_group.expenses
