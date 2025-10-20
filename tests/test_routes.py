@@ -333,11 +333,14 @@ def test_balance_summary_calculates_multiple_expenses(client, app):
 
 def test_balance_summary_with_no_expenses(client):
     """Test that balance summary works with no expenses in database."""
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
     # Act
     response = client.get("/balance-summary")
 
     # Assert
-    assert response.status_code == 302
+    assert response.status_code == 200
 
 
 def test_balance_summary_requires_login(client):
