@@ -13,9 +13,9 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 @auth_bp.route("/login")
 def login():
     """Display login page."""
-    # If user is already logged in, redirect to expense splitter
+    # If user is already logged in, redirect to groups page
     if "user_id" in session:
-        return redirect(url_for("expenses.expense_splitter"))
+        return redirect(url_for("groups.list_groups"))
     return render_template("auth/login.html", page_id="login")
 
 
@@ -82,7 +82,7 @@ def verify_otp():
     session["user_id"] = user.id
     session["user_email"] = user.email
 
-    return redirect(url_for("expenses.expense_splitter"))
+    return redirect(url_for("groups.list_groups"))
 
 
 @auth_bp.route("/logout")
