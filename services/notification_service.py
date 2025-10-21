@@ -1,6 +1,4 @@
 from flask import url_for, current_app
-from flask_mail import Message
-from extensions import mail
 
 def notify_settlement_recipient(settlement):
     payer, recipient = settlement.payer, settlement.recipient
@@ -11,17 +9,19 @@ def notify_settlement_recipient(settlement):
         f"Note: {settlement.note or '-'}\n"
         f"View details: {detail_url}\n"
     )
-    msg = Message(
-        subject=subject,
-        recipients=[recipient.email],
-        body=body,
-        sender=current_app.config.get("MAIL_DEFAULT_SENDER", "no-reply@sprintpay.local"),
-    )
-    mail.send(msg)
+    
+    # Print notification to terminal instead of sending email
+    print("\n" + "="*60)
+    print("SETTLEMENT NOTIFICATION")
+    print("="*60)
+    print(f"To: {recipient.email}")
+    print(f"Subject: {subject}")
+    print(f"\n{body}")
+    print("="*60 + "\n")
 
 
 def notify_expense_participants(expense, participant_emails):
-    """Send email notification to all participants when an expense is added."""
+    """Print notification to terminal for all participants when an expense is added."""
     subject = f"New expense added: {expense.description}"
     body = (
         f"A new expense has been added:\n\n"
@@ -31,11 +31,12 @@ def notify_expense_participants(expense, participant_emails):
         f"Participants: {expense.participants or 'Not specified'}\n"
     )
     
+    # Print notification to terminal instead of sending email
     for email in participant_emails:
-        msg = Message(
-            subject=subject,
-            recipients=[email],
-            body=body,
-            sender=current_app.config.get("MAIL_DEFAULT_SENDER", "no-reply@sprintpay.local"),
-        )
-        mail.send(msg)
+        print("\n" + "="*60)
+        print("EXPENSE NOTIFICATION")
+        print("="*60)
+        print(f"To: {email}")
+        print(f"Subject: {subject}")
+        print(f"\n{body}")
+        print("="*60 + "\n")

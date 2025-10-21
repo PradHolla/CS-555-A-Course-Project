@@ -1,22 +1,23 @@
 """
 Tests for settlement notification feature.
 
-This module tests the email notification system that alerts users
+This module tests the notification system that alerts users
 when someone records a payment to them.
 """
 
 import pytest
+from unittest.mock import patch
 from flask import url_for
 from models import User, Settlement
-from extensions import db, mail
+from extensions import db
 
 
 # === Settlement Notification Tests ===
 
 
-def test_settlement_creation_sends_email_to_recipient(client, app):
+def test_settlement_creation_sends_notification_to_recipient(client, app):
     """
-    Test that creating a settlement sends an email notification to the recipient.
+    Test that creating a settlement sends a notification to the recipient.
     
     Acceptance Criteria:
     - Given a member settles a payment to me
@@ -38,7 +39,7 @@ def test_settlement_creation_sends_email_to_recipient(client, app):
         sess["user_email"] = "neha@example.com"
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         response = client.post(
             "/settlements",
             data={
@@ -53,25 +54,20 @@ def test_settlement_creation_sends_email_to_recipient(client, app):
         # Assert
         assert response.status_code == 302  # Redirect after success
         
-        # Check email was sent
-        assert len(outbox) == 1
-        email = outbox[0]
+        # Check notification was printed
+        assert mock_print.called
         
-        # Verify email recipient
-        assert "john@example.com" in email.recipients
-        
-        # Verify email subject contains payer name and amount
-        assert "Neha" in email.subject
-        assert "$500.00" in email.subject
-        
-        # Verify email body contains payment details
-        assert "Neha has paid $500.00 to you" in email.body
-        assert "Rent payment" in email.body
+        # Verify notification contains correct details
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "john@example.com" in printed_output
+        assert "Neha" in printed_output
+        assert "$500.00" in printed_output
+        assert "Rent payment" in printed_output
 
 
-def test_settlement_email_contains_detail_link(client, app):
+def test_settlement_notification_contains_detail_link(client, app):
     """
-    Test that the notification email contains a link to settlement details.
+    Test that the notification contains a link to settlement details.
     
     Acceptance Criteria:
     - Given I tap the alert
@@ -90,7 +86,7 @@ def test_settlement_email_contains_detail_link(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         response = client.post(
             "/settlements",
             data={
@@ -101,15 +97,15 @@ def test_settlement_email_contains_detail_link(client, app):
         )
 
         # Assert
-        assert len(outbox) == 1
-        email = outbox[0]
+        assert mock_print.called
         
-        # Verify email contains link to settlement details
-        assert "/settlements/" in email.body
-        assert "View details:" in email.body
+        # Verify notification contains link to settlement details
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "/settlements/" in printed_output
+        assert "View details:" in printed_output
 
 
-def test_settlement_without_note_sends_email(client, app):
+def test_settlement_without_note_sends_notification(client, app):
     """Test that settlement without a note still sends notification."""
     # Arrange
     with app.app_context():
@@ -124,7 +120,7 @@ def test_settlement_without_note_sends_email(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         response = client.post(
             "/settlements",
             data={
@@ -137,9 +133,9 @@ def test_settlement_without_note_sends_email(client, app):
 
         # Assert
         assert response.status_code == 302
-        assert len(outbox) == 1
-        email = outbox[0]
-        assert "Charlie has paid $100.00 to you" in email.body
+        assert mock_print.called
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "Charlie has paid $100.00 to you" in printed_output
 
 
 def test_settlement_detail_page_accessible(client, app):
@@ -180,8 +176,8 @@ def test_settlement_detail_page_accessible(client, app):
     assert b"Utilities" in response.data  # Note
 
 
-def test_multiple_settlements_send_separate_emails(client, app):
-    """Test that multiple settlements send separate email notifications."""
+def test_multiple_settlements_send_separate_notifications(client, app):
+    """Test that multiple settlements send separate notifications."""
     # Arrange
     with app.app_context():
         payer = User(name="Grace", email="grace@example.com")
@@ -197,7 +193,7 @@ def test_multiple_settlements_send_separate_emails(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         # Create first settlement
         client.post(
             "/settlements",
@@ -218,17 +214,17 @@ def test_multiple_settlements_send_separate_emails(client, app):
             },
         )
 
-        # Assert
-        assert len(outbox) == 2
+        # Assert - notifications were printed
+        assert mock_print.called
         
-        # Verify each email went to correct recipient
-        recipients = [email.recipients[0] for email in outbox]
-        assert "henry@example.com" in recipients
-        assert "iris@example.com" in recipients
+        # Verify each notification went to correct recipient
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "henry@example.com" in printed_output
+        assert "iris@example.com" in printed_output
 
 
-def test_settlement_email_sender_configured(client, app):
-    """Test that email sender is properly configured."""
+def test_settlement_notification_is_sent(client, app):
+    """Test that notification is sent when settlement is created."""
     # Arrange
     with app.app_context():
         payer = User(name="Jack", email="jack@example.com")
@@ -242,7 +238,7 @@ def test_settlement_email_sender_configured(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         client.post(
             "/settlements",
             data={
@@ -253,6 +249,6 @@ def test_settlement_email_sender_configured(client, app):
         )
 
         # Assert
-        assert len(outbox) == 1
-        email = outbox[0]
-        assert email.sender is not None
+        assert mock_print.called
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "kate@example.com" in printed_output

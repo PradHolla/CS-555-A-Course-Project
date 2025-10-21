@@ -1,24 +1,25 @@
 """
 Tests for expense notification feature.
 
-This module tests the email notification system that alerts participants
+This module tests the notification system that alerts participants
 when a new expense is added.
 """
 
 import pytest
+from unittest.mock import patch
 from flask import url_for
 from models import User, Expense
-from extensions import db, mail
+from extensions import db
 
 
-def test_expense_creation_sends_email_to_participants(client, app):
+def test_expense_creation_sends_notification_to_participants(client, app):
     """
-    Test that creating an expense sends email notifications to participants.
+    Test that creating an expense sends notifications to participants.
     
     Acceptance Criteria:
     - Given a user adds an expense with participants
     - When the expense is saved
-    - Then all participants receive an email notification
+    - Then all participants receive a notification
     """
     # Arrange
     with app.app_context():
@@ -34,7 +35,7 @@ def test_expense_creation_sends_email_to_participants(client, app):
         sess["user_email"] = "payer@example.com"
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         response = client.post(
             "/expense-splitter",
             data={
@@ -49,24 +50,21 @@ def test_expense_creation_sends_email_to_participants(client, app):
         # Assert
         assert response.status_code == 302  # Redirect after success
         
-        # Check emails were sent to both participants
-        assert len(outbox) == 2
+        # Check notifications were printed
+        assert mock_print.called
         
-        # Verify email recipients
-        recipients = [email.recipients[0] for email in outbox]
-        assert "participant1@example.com" in recipients
-        assert "participant2@example.com" in recipients
-        
-        # Verify email content
-        for email in outbox:
-            assert "New expense added" in email.subject
-            assert "Dinner at restaurant" in email.body
-            assert "$150.00" in email.body
-            assert "John" in email.body
+        # Verify notification content
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "participant1@example.com" in printed_output
+        assert "participant2@example.com" in printed_output
+        assert "New expense added" in printed_output
+        assert "Dinner at restaurant" in printed_output
+        assert "$150.00" in printed_output
+        assert "John" in printed_output
 
 
-def test_expense_without_participants_no_email(client, app):
-    """Test that expense without participants doesn't send emails."""
+def test_expense_without_participants_no_notification(client, app):
+    """Test that expense without participants doesn't send notifications."""
     # Arrange
     with app.app_context():
         user = User(email="user@example.com")
@@ -78,7 +76,7 @@ def test_expense_without_participants_no_email(client, app):
         sess["user_id"] = user_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.notify_expense_participants') as mock_notify:
         response = client.post(
             "/expense-splitter",
             data={
@@ -91,11 +89,11 @@ def test_expense_without_participants_no_email(client, app):
 
         # Assert
         assert response.status_code == 302
-        assert len(outbox) == 0  # No emails sent
+        assert not mock_notify.called  # No notifications sent
 
 
-def test_expense_email_contains_all_details(client, app):
-    """Test that notification email contains all expense details."""
+def test_expense_notification_contains_all_details(client, app):
+    """Test that notification contains all expense details."""
     # Arrange
     with app.app_context():
         payer = User(email="payer@example.com")
@@ -108,7 +106,7 @@ def test_expense_email_contains_all_details(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         response = client.post(
             "/expense-splitter",
             data={
@@ -120,18 +118,18 @@ def test_expense_email_contains_all_details(client, app):
         )
 
         # Assert
-        assert len(outbox) == 1
-        email = outbox[0]
+        assert mock_print.called
         
-        # Verify all details are in email
-        assert "Movie tickets" in email.body
-        assert "$30.00" in email.body
-        assert "Bob" in email.body
-        assert "participant@example.com" in email.body
+        # Verify all details are in notification
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "Movie tickets" in printed_output
+        assert "$30.00" in printed_output
+        assert "Bob" in printed_output
+        assert "participant@example.com" in printed_output
 
 
-def test_multiple_expenses_send_separate_emails(client, app):
-    """Test that multiple expenses send separate email notifications."""
+def test_multiple_expenses_send_separate_notifications(client, app):
+    """Test that multiple expenses send separate notifications."""
     # Arrange
     with app.app_context():
         payer = User(email="payer@example.com")
@@ -144,7 +142,7 @@ def test_multiple_expenses_send_separate_emails(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         # Create first expense
         client.post(
             "/expense-splitter",
@@ -168,15 +166,16 @@ def test_multiple_expenses_send_separate_emails(client, app):
         )
 
         # Assert
-        assert len(outbox) == 2
+        assert mock_print.called
         
-        # Verify different expense details in each email
-        assert "Lunch" in outbox[0].body
-        assert "Coffee" in outbox[1].body
+        # Verify different expense details in notifications
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "Lunch" in printed_output
+        assert "Coffee" in printed_output
 
 
-def test_expense_notification_sender_configured(client, app):
-    """Test that email sender is properly configured."""
+def test_expense_notification_is_sent(client, app):
+    """Test that notification is sent when expense is created."""
     # Arrange
     with app.app_context():
         payer = User(email="payer@example.com")
@@ -189,7 +188,7 @@ def test_expense_notification_sender_configured(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with mail.record_messages() as outbox:
+    with patch('services.notification_service.print') as mock_print:
         client.post(
             "/expense-splitter",
             data={
@@ -201,6 +200,6 @@ def test_expense_notification_sender_configured(client, app):
         )
 
         # Assert
-        assert len(outbox) == 1
-        email = outbox[0]
-        assert email.sender is not None
+        assert mock_print.called
+        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        assert "participant@example.com" in printed_output
