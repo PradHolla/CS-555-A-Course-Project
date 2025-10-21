@@ -42,7 +42,7 @@ class Expense(db.Model):
     split_type = db.Column(db.String(20), nullable=False, default='equal')  # 'equal' or 'custom'
     split_details = db.Column(db.Text)  # JSON string: {"member": amount}
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    
+
     # Relationship
     group = db.relationship('Group', backref='expenses')
 
@@ -60,7 +60,7 @@ class Settlement(db.Model):
     # Relationships
     payer = db.relationship('User', foreign_keys=[payer_id], backref='payments_made')
     recipient = db.relationship('User', foreign_keys=[recipient_id], backref='payments_received')
-    
+
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)

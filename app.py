@@ -1,14 +1,14 @@
 """Main Flask application with blueprint registration."""
 
 import os
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 from flask import Flask
 
 from extensions import db, mail
 
 # Import models to ensure they're registered with SQLAlchemy
-from models import Expense, User, Settlement  # noqa: F401
+from models import Expense, Settlement, User  # noqa: F401
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,7 +45,7 @@ def create_app():
     app.register_blueprint(home_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(expenses_bp)
-    app.register_blueprint(settlements_bp)         
+    app.register_blueprint(settlements_bp)
 
     from routes.groups import groups_bp
     app.register_blueprint(groups_bp)

@@ -40,7 +40,7 @@ class ExpenseService:
 
             # Parse split details
             split_details = ExpenseService._parse_split_details(expense)
-            
+
             if not split_details:
                 continue
 
@@ -119,10 +119,10 @@ class ExpenseService:
     def _parse_split_details(expense):
         """
         Parse split details from expense, handling both old and new formats.
-        
+
         Args:
             expense: Expense model object
-            
+
         Returns:
             Dictionary mapping participant names to their share amounts
         """
@@ -132,53 +132,53 @@ class ExpenseService:
                 return json.loads(expense.split_details)
             except (json.JSONDecodeError, TypeError):
                 pass
-        
+
         # Fall back to old format (participants text field)
         if expense.participants:
             participants = [p.strip() for p in expense.participants.split(",") if p.strip()]
             if participants:
                 share = expense.amount / len(participants)
                 return {participant: share for participant in participants}
-        
+
         return {}
 
     @staticmethod
     def validate_custom_split(split_details, total_amount):
         """
         Validate that custom split amounts sum to the total amount.
-        
+
         Args:
             split_details: Dictionary mapping participant names to amounts
             total_amount: Total expense amount
-            
+
         Returns:
             Tuple of (is_valid, error_message)
         """
         if not split_details:
             return False, "No participants specified"
-        
+
         total_split = sum(split_details.values())
         tolerance = 0.01  # Allow small floating point differences
-        
+
         if abs(total_split - total_amount) > tolerance:
             return False, f"Split amounts ({total_split:.2f}) must equal total amount ({total_amount:.2f})"
-        
+
         return True, None
 
     @staticmethod
     def calculate_equal_split(participants, total_amount):
         """
         Calculate equal split for given participants.
-        
+
         Args:
             participants: List of participant names
             total_amount: Total expense amount
-            
+
         Returns:
             Dictionary mapping participant names to their equal share
         """
         if not participants:
             return {}
-        
+
         share = total_amount / len(participants)
         return {participant: share for participant in participants}

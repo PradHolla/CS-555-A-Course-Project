@@ -5,17 +5,16 @@ This module tests the notification system that alerts participants
 when a new expense is added.
 """
 
-import pytest
 from unittest.mock import patch
-from flask import url_for
-from models import User, Expense
+
 from extensions import db
+from models import User
 
 
 def test_expense_creation_sends_notification_to_participants(client, app):
     """
     Test that creating an expense sends notifications to participants.
-    
+
     Acceptance Criteria:
     - Given a user adds an expense with participants
     - When the expense is saved
@@ -49,10 +48,10 @@ def test_expense_creation_sends_notification_to_participants(client, app):
 
         # Assert
         assert response.status_code == 302  # Redirect after success
-        
+
         # Check notifications were printed
         assert mock_print.called
-        
+
         # Verify notification content
         printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
         assert "participant1@example.com" in printed_output
@@ -107,7 +106,7 @@ def test_expense_notification_contains_all_details(client, app):
 
     # Act
     with patch('services.notification_service.print') as mock_print:
-        response = client.post(
+        client.post(
             "/expense-splitter",
             data={
                 "description": "Movie tickets",
@@ -119,7 +118,7 @@ def test_expense_notification_contains_all_details(client, app):
 
         # Assert
         assert mock_print.called
-        
+
         # Verify all details are in notification
         printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
         assert "Movie tickets" in printed_output
@@ -153,7 +152,7 @@ def test_multiple_expenses_send_separate_notifications(client, app):
                 "participants": "participant@example.com",
             },
         )
-        
+
         # Create second expense
         client.post(
             "/expense-splitter",
@@ -167,7 +166,7 @@ def test_multiple_expenses_send_separate_notifications(client, app):
 
         # Assert
         assert mock_print.called
-        
+
         # Verify different expense details in notifications
         printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
         assert "Lunch" in printed_output

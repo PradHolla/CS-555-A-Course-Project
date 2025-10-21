@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from extensions import db
-from models import Expense, User, Group
+from models import Expense, Group, User
 
 # === User Model Tests ===
 
@@ -196,10 +196,10 @@ def test_expense_group_relationship(app):
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
-    
+
     expense = Expense(
-        description="Lunch", 
-        amount=30.0, 
+        description="Lunch",
+        amount=30.0,
         payer="Alice",
         group_id=group.id,
         split_type="equal",
@@ -223,11 +223,10 @@ def test_expense_split_details_json_storage(app):
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
-    
-    split_details = {"Alice": 20.0, "Bob": 10.0}
+
     expense = Expense(
-        description="Dinner", 
-        amount=30.0, 
+        description="Dinner",
+        amount=30.0,
         payer="Alice",
         group_id=group.id,
         split_type="custom",
@@ -250,10 +249,10 @@ def test_expense_default_split_type(app):
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
-    
+
     expense = Expense(
-        description="Lunch", 
-        amount=20.0, 
+        description="Lunch",
+        amount=20.0,
         payer="Alice",
         group_id=group.id
     )
@@ -273,16 +272,16 @@ def test_group_expenses_backref(app):
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
-    
+
     expense1 = Expense(
-        description="Lunch", 
-        amount=20.0, 
+        description="Lunch",
+        amount=20.0,
         payer="Alice",
         group_id=group.id
     )
     expense2 = Expense(
-        description="Dinner", 
-        amount=40.0, 
+        description="Dinner",
+        amount=40.0,
         payer="Bob",
         group_id=group.id
     )

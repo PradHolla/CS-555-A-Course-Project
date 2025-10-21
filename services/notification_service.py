@@ -1,4 +1,5 @@
-from flask import url_for, current_app
+from flask import url_for
+
 
 def notify_settlement_recipient(settlement):
     payer, recipient = settlement.payer, settlement.recipient
@@ -9,7 +10,7 @@ def notify_settlement_recipient(settlement):
         f"Note: {settlement.note or '-'}\n"
         f"View details: {detail_url}\n"
     )
-    
+
     # Print notification to terminal instead of sending email
     print("\n" + "="*60)
     print("SETTLEMENT NOTIFICATION")
@@ -30,7 +31,7 @@ def notify_expense_participants(expense, participant_emails):
         f"Paid by: {expense.payer}\n"
         f"Participants: {expense.participants or 'Not specified'}\n"
     )
-    
+
     # Print notification to terminal instead of sending email
     for email in participant_emails:
         print("\n" + "="*60)

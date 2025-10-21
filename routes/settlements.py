@@ -1,8 +1,9 @@
-from flask import Blueprint, request, redirect, url_for, render_template, flash
-from utils.decorators import login_required
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+
 from extensions import db
 from models import Settlement
 from services.notification_service import notify_settlement_recipient
+from utils.decorators import login_required
 
 settlements_bp = Blueprint('settlements', __name__, url_prefix='/settlements')
 

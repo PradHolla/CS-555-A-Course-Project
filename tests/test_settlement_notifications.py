@@ -5,12 +5,10 @@ This module tests the notification system that alerts users
 when someone records a payment to them.
 """
 
-import pytest
 from unittest.mock import patch
-from flask import url_for
-from models import User, Settlement
-from extensions import db
 
+from extensions import db
+from models import Settlement, User
 
 # === Settlement Notification Tests ===
 
@@ -18,7 +16,7 @@ from extensions import db
 def test_settlement_creation_sends_notification_to_recipient(client, app):
     """
     Test that creating a settlement sends a notification to the recipient.
-    
+
     Acceptance Criteria:
     - Given a member settles a payment to me
     - When the transaction is saved
@@ -53,10 +51,10 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
 
         # Assert
         assert response.status_code == 302  # Redirect after success
-        
+
         # Check notification was printed
         assert mock_print.called
-        
+
         # Verify notification contains correct details
         printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
         assert "john@example.com" in printed_output
@@ -68,7 +66,7 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
 def test_settlement_notification_contains_detail_link(client, app):
     """
     Test that the notification contains a link to settlement details.
-    
+
     Acceptance Criteria:
     - Given I tap the alert
     - Then I am taken to the settlement details page
@@ -87,7 +85,7 @@ def test_settlement_notification_contains_detail_link(client, app):
 
     # Act
     with patch('services.notification_service.print') as mock_print:
-        response = client.post(
+        client.post(
             "/settlements",
             data={
                 "amount": "250.50",
@@ -98,7 +96,7 @@ def test_settlement_notification_contains_detail_link(client, app):
 
         # Assert
         assert mock_print.called
-        
+
         # Verify notification contains link to settlement details
         printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
         assert "/settlements/" in printed_output
@@ -141,7 +139,7 @@ def test_settlement_without_note_sends_notification(client, app):
 def test_settlement_detail_page_accessible(client, app):
     """
     Test that settlement detail page is accessible and displays correct info.
-    
+
     This verifies the link in the email notification works correctly.
     """
     # Arrange
@@ -150,7 +148,7 @@ def test_settlement_detail_page_accessible(client, app):
         recipient = User(name="Frank", email="frank@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
-        
+
         settlement = Settlement(
             amount=750.00,
             payer_id=payer.id,
@@ -203,7 +201,7 @@ def test_multiple_settlements_send_separate_notifications(client, app):
                 "recipient_id": recipient1_id,
             },
         )
-        
+
         # Create second settlement
         client.post(
             "/settlements",
@@ -216,7 +214,7 @@ def test_multiple_settlements_send_separate_notifications(client, app):
 
         # Assert - notifications were printed
         assert mock_print.called
-        
+
         # Verify each notification went to correct recipient
         printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
         assert "henry@example.com" in printed_output

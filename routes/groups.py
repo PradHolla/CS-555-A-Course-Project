@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from utils.decorators import login_required
-from models import Group
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+
 from extensions import db
+from models import Group
+from utils.decorators import login_required
 
 groups_bp = Blueprint('groups', __name__, url_prefix='/groups')
 
@@ -29,7 +30,7 @@ def create_group():
         db.session.add(group)
         db.session.commit()
         flash('Group created successfully.', 'success')
-    except Exception as e:
+    except Exception:
         db.session.rollback()
         flash('Failed to create group. Please try again.', 'error')
         return redirect(url_for('groups.list_groups')), 400
