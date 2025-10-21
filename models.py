@@ -37,8 +37,14 @@ class Expense(db.Model):
     description = db.Column(db.String(200), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     payer = db.Column(db.String(100), nullable=False)
-    participants = db.Column(db.Text)
+    participants = db.Column(db.Text)  # Keep for backward compatibility during migration
+    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=True)  # Start as nullable for migration
+    split_type = db.Column(db.String(20), nullable=False, default='equal')  # 'equal' or 'custom'
+    split_details = db.Column(db.Text)  # JSON string: {"member": amount}
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationship
+    group = db.relationship('Group', backref='expenses')
 
 
 class Settlement(db.Model):
