@@ -4,7 +4,7 @@ from flask import url_for
 def notify_settlement_recipient(settlement):
     payer, recipient = settlement.payer, settlement.recipient
     subject = f"{payer.name} has paid ${settlement.amount:.2f} to you"
-    detail_url = url_for('settlements.detail', settlement_id=settlement.id, _external=True)
+    detail_url = url_for("settlements.detail", settlement_id=settlement.id, _external=True)
     body = (
         f"{payer.name} has paid ${settlement.amount:.2f} to you.\n\n"
         f"Note: {settlement.note or '-'}\n"
@@ -12,13 +12,13 @@ def notify_settlement_recipient(settlement):
     )
 
     # Print notification to terminal instead of sending email
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("SETTLEMENT NOTIFICATION")
-    print("="*60)
+    print("=" * 60)
     print(f"To: {recipient.email}")
     print(f"Subject: {subject}")
     print(f"\n{body}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def notify_expense_participants(expense, participant_emails):
@@ -34,10 +34,10 @@ def notify_expense_participants(expense, participant_emails):
 
     # Print notification to terminal instead of sending email
     for email in participant_emails:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("EXPENSE NOTIFICATION")
-        print("="*60)
+        print("=" * 60)
         print(f"To: {email}")
         print(f"Subject: {subject}")
         print(f"\n{body}")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")

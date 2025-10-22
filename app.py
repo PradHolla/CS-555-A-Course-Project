@@ -48,10 +48,10 @@ def create_app():
     app.register_blueprint(settlements_bp)
 
     from routes.groups import groups_bp
+
     app.register_blueprint(groups_bp)
 
     return app
-
 
 
 def init_db(app):

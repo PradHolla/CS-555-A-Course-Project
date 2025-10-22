@@ -113,7 +113,7 @@ def expense_splitter():
             group_id=group_id,
             split_type=split_type,
             split_details=json.dumps(split_details),
-            participants=", ".join(split_details.keys())  # Keep for backward compatibility
+            participants=", ".join(split_details.keys()),  # Keep for backward compatibility
         )
         db.session.add(expense)
         db.session.commit()
@@ -135,7 +135,11 @@ def expense_splitter():
 
     # Get expenses (filter by group if specified)
     if selected_group_id:
-        expenses = Expense.query.filter_by(group_id=selected_group_id).order_by(Expense.created_at.desc()).all()
+        expenses = (
+            Expense.query.filter_by(group_id=selected_group_id)
+            .order_by(Expense.created_at.desc())
+            .all()
+        )
     else:
         expenses = Expense.query.order_by(Expense.created_at.desc()).all()
 
@@ -144,16 +148,24 @@ def expense_splitter():
     for expense in expenses:
         split_details = ExpenseService._parse_split_details(expense)
         participants = list(split_details.keys())
-        share = list(split_details.values())[0] if len(split_details) == 1 and expense.split_type == "equal" else None
-        expense_views.append({
-            "model": expense,
-            "participants": participants,
-            "share": share,
-            "split_details": split_details
-        })
+        share = (
+            list(split_details.values())[0]
+            if len(split_details) == 1 and expense.split_type == "equal"
+            else None
+        )
+        expense_views.append(
+            {
+                "model": expense,
+                "participants": participants,
+                "share": share,
+                "split_details": split_details,
+            }
+        )
 
     # Convert groups to JSON-serializable format
-    groups_data = [{"id": group.id, "name": group.name, "members": group.members} for group in groups]
+    groups_data = [
+        {"id": group.id, "name": group.name, "members": group.members} for group in groups
+    ]
 
     return render_template(
         "apps/expense_splitter/index.html",
@@ -161,7 +173,7 @@ def expense_splitter():
         expenses=expense_views,
         groups=groups,
         groups_data=groups_data,
-        selected_group_id=selected_group_id
+        selected_group_id=selected_group_id,
     )
 
 
@@ -183,7 +195,9 @@ def balance_summary():
 
     # Get groups for the filter dropdown
     groups = Group.query.all()
-    groups_data = [{"id": group.id, "name": group.name, "members": group.members} for group in groups]
+    groups_data = [
+        {"id": group.id, "name": group.name, "members": group.members} for group in groups
+    ]
 
     return render_template(
         "apps/expense_splitter/balance.html",
@@ -192,5 +206,5 @@ def balance_summary():
         transactions=balance_data["transactions"],
         groups=groups,
         groups_data=groups_data,
-        selected_group_id=group_id
+        selected_group_id=group_id,
     )

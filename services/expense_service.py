@@ -161,7 +161,10 @@ class ExpenseService:
         tolerance = 0.01  # Allow small floating point differences
 
         if abs(total_split - total_amount) > tolerance:
-            return False, f"Split amounts ({total_split:.2f}) must equal total amount ({total_amount:.2f})"
+            return (
+                False,
+                f"Split amounts ({total_split:.2f}) must equal total amount ({total_amount:.2f})",
+            )
 
         return True, None
 

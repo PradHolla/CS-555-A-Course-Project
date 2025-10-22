@@ -37,7 +37,7 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
         sess["user_email"] = "neha@example.com"
 
     # Act
-    with patch('services.notification_service.print') as mock_print:
+    with patch("services.notification_service.print") as mock_print:
         response = client.post(
             "/settlements",
             data={
@@ -56,7 +56,7 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
         assert mock_print.called
 
         # Verify notification contains correct details
-        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         assert "john@example.com" in printed_output
         assert "Neha" in printed_output
         assert "$500.00" in printed_output
@@ -84,7 +84,7 @@ def test_settlement_notification_contains_detail_link(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with patch('services.notification_service.print') as mock_print:
+    with patch("services.notification_service.print") as mock_print:
         client.post(
             "/settlements",
             data={
@@ -98,7 +98,7 @@ def test_settlement_notification_contains_detail_link(client, app):
         assert mock_print.called
 
         # Verify notification contains link to settlement details
-        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         assert "/settlements/" in printed_output
         assert "View details:" in printed_output
 
@@ -118,7 +118,7 @@ def test_settlement_without_note_sends_notification(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with patch('services.notification_service.print') as mock_print:
+    with patch("services.notification_service.print") as mock_print:
         response = client.post(
             "/settlements",
             data={
@@ -132,7 +132,7 @@ def test_settlement_without_note_sends_notification(client, app):
         # Assert
         assert response.status_code == 302
         assert mock_print.called
-        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         assert "Charlie has paid $100.00 to you" in printed_output
 
 
@@ -191,7 +191,7 @@ def test_multiple_settlements_send_separate_notifications(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with patch('services.notification_service.print') as mock_print:
+    with patch("services.notification_service.print") as mock_print:
         # Create first settlement
         client.post(
             "/settlements",
@@ -216,7 +216,7 @@ def test_multiple_settlements_send_separate_notifications(client, app):
         assert mock_print.called
 
         # Verify each notification went to correct recipient
-        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         assert "henry@example.com" in printed_output
         assert "iris@example.com" in printed_output
 
@@ -236,7 +236,7 @@ def test_settlement_notification_is_sent(client, app):
         sess["user_id"] = payer_id
 
     # Act
-    with patch('services.notification_service.print') as mock_print:
+    with patch("services.notification_service.print") as mock_print:
         client.post(
             "/settlements",
             data={
@@ -248,5 +248,5 @@ def test_settlement_notification_is_sent(client, app):
 
         # Assert
         assert mock_print.called
-        printed_output = ' '.join(str(call) for call in mock_print.call_args_list)
+        printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         assert "kate@example.com" in printed_output

@@ -203,7 +203,7 @@ def test_expense_group_relationship(app):
         payer="Alice",
         group_id=group.id,
         split_type="equal",
-        split_details='{"Alice": 15.0, "Bob": 15.0}'
+        split_details='{"Alice": 15.0, "Bob": 15.0}',
     )
 
     # Act
@@ -230,7 +230,7 @@ def test_expense_split_details_json_storage(app):
         payer="Alice",
         group_id=group.id,
         split_type="custom",
-        split_details='{"Alice": 20.0, "Bob": 10.0}'
+        split_details='{"Alice": 20.0, "Bob": 10.0}',
     )
 
     # Act
@@ -250,12 +250,7 @@ def test_expense_default_split_type(app):
     db.session.add(group)
     db.session.commit()
 
-    expense = Expense(
-        description="Lunch",
-        amount=20.0,
-        payer="Alice",
-        group_id=group.id
-    )
+    expense = Expense(description="Lunch", amount=20.0, payer="Alice", group_id=group.id)
 
     # Act
     db.session.add(expense)
@@ -273,18 +268,8 @@ def test_group_expenses_backref(app):
     db.session.add(group)
     db.session.commit()
 
-    expense1 = Expense(
-        description="Lunch",
-        amount=20.0,
-        payer="Alice",
-        group_id=group.id
-    )
-    expense2 = Expense(
-        description="Dinner",
-        amount=40.0,
-        payer="Bob",
-        group_id=group.id
-    )
+    expense1 = Expense(description="Lunch", amount=20.0, payer="Alice", group_id=group.id)
+    expense2 = Expense(description="Dinner", amount=40.0, payer="Bob", group_id=group.id)
 
     # Act
     db.session.add_all([expense1, expense2])
