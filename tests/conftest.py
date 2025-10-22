@@ -31,6 +31,9 @@ def app(tmp_path):
         TESTING=True,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{db_path}",
         SQLALCHEMY_ENGINE_OPTIONS={"connect_args": {"check_same_thread": False}},
+        # Email configuration for testing - records emails without sending
+        MAIL_SUPPRESS_SEND=True,  # Don't actually send emails in tests
+        MAIL_DEFAULT_SENDER="test@sprintpay.local",
     )
 
     with flask_app.app_context():

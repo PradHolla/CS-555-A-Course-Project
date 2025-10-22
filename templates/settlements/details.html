@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container" style="margin-top: 2rem;">
+  <h2 class="text-xl font-bold mb-2">Settlement #{{ settlement.id }}</h2>
+
+  <p><strong>Payer:</strong> {{ settlement.payer.name }}</p>
+  <p><strong>Recipient:</strong> {{ settlement.recipient.name }}</p>
+  <p><strong>Amount:</strong> ${{ "%.2f"|format(settlement.amount) }}</p>
+  <p><strong>Note:</strong> {{ settlement.note or "-" }}</p>
+  <p><strong>Date:</strong> {{ settlement.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+
+  <hr style="margin: 1rem 0;">
+
+  <a href="{{ url_for('expenses.expense_splitter') }}" class="underline">
+    ← Back to Expense Splitter
+  </a>
+</div>
+{% endblock %}

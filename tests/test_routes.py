@@ -1,4 +1,4 @@
-from models import Expense, User, Group
+from models import Expense, Group, User
 
 # === Authentication Route Tests ===
 
@@ -190,12 +190,12 @@ def test_expense_splitter_post_creates_expense(client, app):
     """Test that POST /expense-splitter creates a new expense in the database."""
     # Arrange
     from extensions import db
-    
+
     # Create a group first
     group = Group(name="Test Group", members="Alex, Sam, Jo")
     db.session.add(group)
     db.session.commit()
-    
+
     # Create a logged-in user session
     with client.session_transaction() as session:
         session["user_id"] = 1
@@ -207,7 +207,7 @@ def test_expense_splitter_post_creates_expense(client, app):
         "payer": "Alex",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alex", "Sam", "Jo"]
+        "participants": ["Alex", "Sam", "Jo"],
     }
 
     # Act
@@ -240,11 +240,13 @@ def test_expense_splitter_rejects_invalid_amount(client):
     assert response.status_code == 302
     assert Expense.query.count() == 0
 
+
 def test_groups_list_returns_ok(client):
     with client.session_transaction() as sess:
-        sess['user_id'] = 1
-    response = client.get('/groups/')
+        sess["user_id"] = 1
+    response = client.get("/groups/")
     assert response.status_code == 200
+
 
 def test_groups_create_group_with_members(client):
     """Test that POST /groups creates a new group in the database."""
@@ -267,6 +269,7 @@ def test_groups_create_group_with_members(client):
     stored = Group.query.filter_by(name="My Agile group").first()
     assert stored is not None
     assert stored.members == "Anikait, Sairithik, Pradhyumna"
+
 
 # === Balance Summary Tests ===
 
@@ -405,7 +408,7 @@ def test_expense_splitter_requires_group_selection(client, app):
         "payer": "Alice",
         "group_id": "",  # Empty group
         "split_type": "equal",
-        "participants": ["Alice", "Bob"]
+        "participants": ["Alice", "Bob"],
     }
 
     # Act
@@ -420,7 +423,7 @@ def test_expense_splitter_rejects_zero_amount(client, app):
     """Test that expense creation rejects zero amount."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
@@ -435,7 +438,7 @@ def test_expense_splitter_rejects_zero_amount(client, app):
         "payer": "Alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alice", "Bob"]
+        "participants": ["Alice", "Bob"],
     }
 
     # Act
@@ -450,7 +453,7 @@ def test_expense_splitter_rejects_negative_amount(client, app):
     """Test that expense creation rejects negative amount."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
@@ -465,7 +468,7 @@ def test_expense_splitter_rejects_negative_amount(client, app):
         "payer": "Alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alice", "Bob"]
+        "participants": ["Alice", "Bob"],
     }
 
     # Act
@@ -480,7 +483,7 @@ def test_expense_splitter_validates_payer_in_group(client, app):
     """Test that payer must be a member of the selected group."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
@@ -495,7 +498,7 @@ def test_expense_splitter_validates_payer_in_group(client, app):
         "payer": "Charlie",  # Not in group
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alice", "Bob"]
+        "participants": ["Alice", "Bob"],
     }
 
     # Act
@@ -510,7 +513,7 @@ def test_expense_splitter_validates_participants_in_group(client, app):
     """Test that participants must be members of the selected group."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
@@ -525,7 +528,7 @@ def test_expense_splitter_validates_participants_in_group(client, app):
         "payer": "Alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alice", "Charlie"]  # Charlie not in group
+        "participants": ["Alice", "Charlie"],  # Charlie not in group
     }
 
     # Act
@@ -540,7 +543,7 @@ def test_expense_splitter_creates_equal_split_expense(client, app):
     """Test creating expense with equal split."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob, Charlie")
     db.session.add(group)
     db.session.commit()
@@ -555,7 +558,7 @@ def test_expense_splitter_creates_equal_split_expense(client, app):
         "payer": "Alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alice", "Bob", "Charlie"]
+        "participants": ["Alice", "Bob", "Charlie"],
     }
 
     # Act
@@ -570,9 +573,10 @@ def test_expense_splitter_creates_equal_split_expense(client, app):
     assert stored.payer == "Alice"
     assert stored.group_id == group.id
     assert stored.split_type == "equal"
-    
+
     # Check split details
     import json
+
     split_details = json.loads(stored.split_details)
     assert split_details["Alice"] == 20.0
     assert split_details["Bob"] == 20.0
@@ -583,7 +587,7 @@ def test_expense_splitter_creates_custom_split_expense(client, app):
     """Test creating expense with custom split."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob, Charlie")
     db.session.add(group)
     db.session.commit()
@@ -600,7 +604,7 @@ def test_expense_splitter_creates_custom_split_expense(client, app):
         "split_type": "custom",
         "custom_amount_Alice": "30.00",
         "custom_amount_Bob": "20.00",
-        "custom_amount_Charlie": "10.00"
+        "custom_amount_Charlie": "10.00",
     }
 
     # Act
@@ -611,9 +615,10 @@ def test_expense_splitter_creates_custom_split_expense(client, app):
     stored = Expense.query.first()
     assert stored is not None
     assert stored.split_type == "custom"
-    
+
     # Check split details
     import json
+
     split_details = json.loads(stored.split_details)
     assert split_details["Alice"] == 30.0
     assert split_details["Bob"] == 20.0
@@ -624,7 +629,7 @@ def test_expense_splitter_rejects_custom_split_mismatch(client, app):
     """Test that custom split amounts must equal total amount."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
@@ -640,7 +645,7 @@ def test_expense_splitter_rejects_custom_split_mismatch(client, app):
         "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_Alice": "30.00",
-        "custom_amount_Bob": "20.00"  # Total = 50, should be valid
+        "custom_amount_Bob": "20.00",  # Total = 50, should be valid
     }
 
     # Act
@@ -655,7 +660,7 @@ def test_expense_splitter_rejects_custom_split_total_mismatch(client, app):
     """Test that custom split with wrong total is rejected."""
     # Arrange
     from extensions import db
-    
+
     group = Group(name="Test Group", members="Alice, Bob")
     db.session.add(group)
     db.session.commit()
@@ -671,7 +676,7 @@ def test_expense_splitter_rejects_custom_split_total_mismatch(client, app):
         "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_Alice": "30.00",
-        "custom_amount_Bob": "30.00"  # Total = 60, should be rejected
+        "custom_amount_Bob": "30.00",  # Total = 60, should be rejected
     }
 
     # Act
@@ -686,7 +691,7 @@ def test_expense_splitter_filters_by_group(client, app):
     """Test that expenses can be filtered by group."""
     # Arrange
     from extensions import db
-    
+
     group1 = Group(name="Group 1", members="Alice, Bob")
     group2 = Group(name="Group 2", members="Charlie, Dave")
     db.session.add_all([group1, group2])
@@ -694,12 +699,20 @@ def test_expense_splitter_filters_by_group(client, app):
 
     # Create expenses for both groups
     expense1 = Expense(
-        description="Lunch 1", amount=20.0, payer="Alice", 
-        group_id=group1.id, split_type="equal", split_details='{"Alice": 10.0, "Bob": 10.0}'
+        description="Lunch 1",
+        amount=20.0,
+        payer="Alice",
+        group_id=group1.id,
+        split_type="equal",
+        split_details='{"Alice": 10.0, "Bob": 10.0}',
     )
     expense2 = Expense(
-        description="Lunch 2", amount=40.0, payer="Charlie", 
-        group_id=group2.id, split_type="equal", split_details='{"Charlie": 20.0, "Dave": 20.0}'
+        description="Lunch 2",
+        amount=40.0,
+        payer="Charlie",
+        group_id=group2.id,
+        split_type="equal",
+        split_details='{"Charlie": 20.0, "Dave": 20.0}',
     )
     db.session.add_all([expense1, expense2])
     db.session.commit()
@@ -721,7 +734,7 @@ def test_balance_summary_filters_by_group(client, app):
     """Test that balance summary can be filtered by group."""
     # Arrange
     from extensions import db
-    
+
     group1 = Group(name="Group 1", members="Alice, Bob")
     group2 = Group(name="Group 2", members="Charlie, Dave")
     db.session.add_all([group1, group2])
@@ -729,12 +742,20 @@ def test_balance_summary_filters_by_group(client, app):
 
     # Create expenses for both groups
     expense1 = Expense(
-        description="Lunch 1", amount=20.0, payer="Alice", 
-        group_id=group1.id, split_type="equal", split_details='{"Alice": 10.0, "Bob": 10.0}'
+        description="Lunch 1",
+        amount=20.0,
+        payer="Alice",
+        group_id=group1.id,
+        split_type="equal",
+        split_details='{"Alice": 10.0, "Bob": 10.0}',
     )
     expense2 = Expense(
-        description="Lunch 2", amount=40.0, payer="Charlie", 
-        group_id=group2.id, split_type="equal", split_details='{"Charlie": 20.0, "Dave": 20.0}'
+        description="Lunch 2",
+        amount=40.0,
+        payer="Charlie",
+        group_id=group2.id,
+        split_type="equal",
+        split_details='{"Charlie": 20.0, "Dave": 20.0}',
     )
     db.session.add_all([expense1, expense2])
     db.session.commit()
@@ -754,6 +775,7 @@ def test_balance_summary_filters_by_group(client, app):
     assert b"Charlie" not in response.data
     assert b"Dave" not in response.data
 
+
 def test_missing_description(client, app):
     from extensions import db
 
@@ -771,11 +793,12 @@ def test_missing_description(client, app):
         "payer": "alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_missing_group(client):
     with client.session_transaction() as session:
@@ -788,11 +811,12 @@ def test_missing_group(client):
         "payer": "alice",
         "group_id": "",  # Missing
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_missing_payer(client, app):
     from extensions import db
@@ -811,11 +835,12 @@ def test_missing_payer(client, app):
         "payer": "",  # Missing
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_invalid_amount_nonpositive(client, app):
     from extensions import db
@@ -834,11 +859,12 @@ def test_invalid_amount_nonpositive(client, app):
         "payer": "alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_invalid_amount_type(client, app):
     from extensions import db
@@ -857,11 +883,12 @@ def test_invalid_amount_type(client, app):
         "payer": "alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_group_not_found(client):
     with client.session_transaction() as session:
@@ -874,11 +901,12 @@ def test_group_not_found(client):
         "payer": "alice",
         "group_id": "99999",  # Nonexistent group
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_payer_not_in_group(client, app):
     from extensions import db
@@ -897,11 +925,12 @@ def test_payer_not_in_group(client, app):
         "payer": "notamember",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"]
+        "participants": ["alice"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_no_participants_selected(client, app):
     from extensions import db
@@ -920,11 +949,12 @@ def test_no_participants_selected(client, app):
         "payer": "alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": []  # Empty list
+        "participants": [],  # Empty list
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_participant_not_in_group(client, app):
     from extensions import db
@@ -943,11 +973,12 @@ def test_participant_not_in_group(client, app):
         "payer": "alice",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice", "notamember"]
+        "participants": ["alice", "notamember"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_invalid_custom_amount(client, app):
     from extensions import db
@@ -968,11 +999,12 @@ def test_invalid_custom_amount(client, app):
         "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_alice": "abc",  # Invalid
-        "custom_amount_bob": "60"
+        "custom_amount_bob": "60",
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_no_custom_split_details(client, app):
     from extensions import db
@@ -993,11 +1025,12 @@ def test_no_custom_split_details(client, app):
         "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_alice": "",
-        "custom_amount_bob": ""
+        "custom_amount_bob": "",
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
 
 def test_invalid_custom_split_sum(client, app):
     from extensions import db
@@ -1017,7 +1050,7 @@ def test_invalid_custom_split_sum(client, app):
         "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_alice": "30",
-        "custom_amount_bob": "40"
+        "custom_amount_bob": "40",
         # Adds up to 70, not 90
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
@@ -1030,8 +1063,8 @@ def test_invalid_custom_split_sum(client, app):
 
 def test_expense_service_parse_split_details_json_error(app):
     """Covers json.loads exception path (lines 133-134)."""
-    from services.expense_service import ExpenseService
     from extensions import db
+    from services.expense_service import ExpenseService
 
     expense = Expense(
         description="Test",
