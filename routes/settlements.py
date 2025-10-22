@@ -1,4 +1,4 @@
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from extensions import db
 from models import Settlement
@@ -33,5 +33,7 @@ def create():
 @settlements_bp.route("/<int:settlement_id>")
 @login_required
 def detail(settlement_id):
-    s = Settlement.query.get_or_404(settlement_id)
+    s = db.session.get(Settlement, settlement_id)
+    if not s:
+        abort(404)
     return render_template("settlements/details.html", settlement=s)

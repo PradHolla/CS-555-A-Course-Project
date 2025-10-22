@@ -52,7 +52,7 @@ def expense_splitter():
             return redirect(url_for("expenses.expense_splitter"))
 
         # Get selected group
-        group = Group.query.get(group_id)
+        group = db.session.get(Group, group_id)
         if not group:
             flash("Selected group not found", "error")
             return redirect(url_for("expenses.expense_splitter"))
