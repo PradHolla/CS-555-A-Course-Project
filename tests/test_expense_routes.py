@@ -367,15 +367,10 @@ def test_expense_splitter_validates_payer_in_group(client, app):
     from extensions import db
 
     alice = User(email="alice@example.com")
-
     bob = User(email="bob@example.com")
-
     db.session.add_all([alice, bob])
-
     db.session.commit()
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
     group.members.extend([alice, bob])
     db.session.add(group)
     db.session.commit()
