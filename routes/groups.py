@@ -43,6 +43,14 @@ def create_group():
         flash("User not found", "error")
         return redirect(url_for("groups.list_groups"))
 
+    # Validate all email formats BEFORE any DB operations
+    if member_emails:
+        emails = [email.strip() for email in member_emails.split(",") if email.strip()]
+        for email in emails:
+            if not is_valid_email(email):
+                flash(f"Invalid email format: {email}", "error")
+                return redirect(url_for("groups.list_groups"))
+
     try:
         # Create the group
         group = Group(name=name, created_by_id=user_id)
@@ -54,13 +62,6 @@ def create_group():
         # Add other members if emails provided
         if member_emails:
             emails = [email.strip() for email in member_emails.split(",") if email.strip()]
-
-            # Validate all email formats
-            for email in emails:
-                if not is_valid_email(email):
-                    db.session.rollback()
-                    flash(f"Invalid email format: {email}", "error")
-                    return redirect(url_for("groups.list_groups"))
 
             for email in emails:
                 if email == creator.email:

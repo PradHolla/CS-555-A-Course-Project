@@ -87,7 +87,7 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)  # Who created the group
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)  # Who created the group
 
     # Many-to-many relationship with Users
     members = db.relationship(
