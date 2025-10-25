@@ -10,6 +10,7 @@ import pytest
 
 from app import app as flask_app
 from extensions import db
+from models import Group, User
 
 
 @pytest.fixture
@@ -57,3 +58,42 @@ def client(app):
         Flask test client instance
     """
     return app.test_client()
+
+
+def create_user_with_group(name, member_names, created_by_email="creator@example.com"):
+    """
+    Helper function to create a group with users in the new schema.
+
+    Args:
+        name: Name of the group
+        member_names: List of member display names (e.g., ["Alice", "Bob"])
+        created_by_email: Email of the user who creates the group
+
+    Returns:
+        Tuple of (group, creator_user, list of member users)
+    """
+    # Create creator
+    creator = User(email=created_by_email, display_name=member_names[0] if member_names else "Creator")
+    db.session.add(creator)
+    db.session.flush()  # Get the creator ID
+
+    # Create group
+    group = Group(name=name, created_by_id=creator.id)
+
+    # Create and add members
+    members = []
+    for i, member_name in enumerate(member_names):
+        # Use creator for first member if email matches
+        if i == 0:
+            user = creator
+        else:
+            user = User(email=f"{member_name.lower()}@example.com", display_name=member_name)
+            db.session.add(user)
+
+        group.members.append(user)
+        members.append(user)
+
+    db.session.add(group)
+    db.session.commit()
+
+    return group, creator, members

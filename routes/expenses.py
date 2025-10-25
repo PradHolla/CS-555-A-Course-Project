@@ -57,11 +57,13 @@ def expense_splitter():
             flash("Selected group not found", "error")
             return redirect(url_for("expenses.expense_splitter"))
 
-        # Parse group members
-        group_members = [m.strip() for m in group.members.split(",") if m.strip()]
+        # Get group member display names (or emails if no display name)
+        group_member_names = [
+            member.display_name or member.email for member in group.members
+        ]
 
         # Validate payer is in group
-        if payer not in group_members:
+        if payer not in group_member_names:
             flash("Payer must be a member of the selected group", "error")
             return redirect(url_for("expenses.expense_splitter"))
 
@@ -75,7 +77,7 @@ def expense_splitter():
 
             # Validate all participants are in group
             for participant in selected_participants:
-                if participant not in group_members:
+                if participant not in group_member_names:
                     flash(f"Participant '{participant}' is not in the selected group", "error")
                     return redirect(url_for("expenses.expense_splitter"))
 
@@ -85,14 +87,14 @@ def expense_splitter():
         else:  # custom split
             # Get custom split amounts
             split_details = {}
-            for member in group_members:
-                amount_key = f"custom_amount_{member}"
+            for member_name in group_member_names:
+                amount_key = f"custom_amount_{member_name}"
                 custom_amount = request.form.get(amount_key, "").strip()
                 if custom_amount:
                     try:
-                        split_details[member] = float(custom_amount)
+                        split_details[member_name] = float(custom_amount)
                     except ValueError:
-                        flash(f"Invalid amount for {member}", "error")
+                        flash(f"Invalid amount for {member_name}", "error")
                         return redirect(url_for("expenses.expense_splitter"))
 
             if not split_details:
@@ -162,9 +164,14 @@ def expense_splitter():
             }
         )
 
-    # Convert groups to JSON-serializable format
+    # Convert groups to JSON-serializable format with member names
     groups_data = [
-        {"id": group.id, "name": group.name, "members": group.members} for group in groups
+        {
+            "id": group.id,
+            "name": group.name,
+            "members": ", ".join([m.display_name or m.email for m in group.members]),
+        }
+        for group in groups
     ]
 
     return render_template(

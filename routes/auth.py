@@ -6,6 +6,7 @@ from flask_mail import Message
 from extensions import db, mail
 from models import User
 from services.auth_service import AuthService
+from utils.validators import is_valid_email
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -26,6 +27,10 @@ def request_otp():
 
     if not email:
         return "Email is required", 400
+
+    # Validate email format
+    if not is_valid_email(email):
+        return "Invalid email format", 400
 
     # Generate OTP using service
     otp = AuthService.generate_otp()

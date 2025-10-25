@@ -16,7 +16,7 @@
 
 **Key Rules:**
 - Never commit directly to `main`
-- All tests must pass (80%+ coverage)
+- All tests must pass (85%+ coverage per file, 90%+ overall)
 - Use conventional commits (`feat:`, `fix:`, etc.)
 - Include screenshots if UI changed
 
@@ -147,17 +147,27 @@ CS-555-A-Course-Project/
 │   └── auth_service.py         # OTP generation, validation logic
 ├── utils/                      # Reusable utilities
 │   ├── __init__.py
-│   └── decorators.py           # login_required, etc.
+│   ├── decorators.py           # login_required, etc.
+│   └── validators.py           # Email validation, etc.
 ├── templates/                  # HTML templates
 │   ├── base.html
 │   ├── home/
 │   ├── auth/
 │   └── apps/
 ├── static/                     # CSS, JS, images
-└── tests/                      # Test files
+└── tests/                      # Test files (organized by feature)
     ├── conftest.py
     ├── test_models.py
-    └── test_routes.py
+    ├── test_home_routes.py
+    ├── test_auth_routes.py
+    ├── test_group_routes.py
+    ├── test_expense_routes.py
+    ├── test_balance_routes.py
+    ├── test_expense_service.py
+    ├── test_protected_routes.py
+    ├── test_validators.py
+    ├── test_expense_notifications.py
+    └── test_settlement_notifications.py
 ```
 
 ### Why Blueprints?
@@ -178,6 +188,7 @@ CS-555-A-Course-Project/
 | Business logic | `services/<feature>_service.py` | OTP logic in `services/auth_service.py` |
 | Database model | `models.py` | Add Group model to `models.py` |
 | Reusable decorator | `utils/decorators.py` | Add `admin_required` decorator |
+| Validation utilities | `utils/validators.py` | Add email/phone validators |
 | Template | `templates/<feature>/` | Add to `templates/auth/` |
 
 ### Adding a New Feature
@@ -227,14 +238,23 @@ class Group(db.Model):
 
 4. **Create templates** in `templates/groups/index.html`
 
-5. **Write tests** in `tests/test_routes.py`:
+5. **Write tests** in appropriate test file:
 ```python
+# In tests/test_group_routes.py (create if doesn't exist)
 def test_groups_list_returns_ok(client):
     with client.session_transaction() as sess:
         sess['user_id'] = 1
     response = client.get('/groups/')
     assert response.status_code == 200
 ```
+
+**Note:** Keep test files organized by feature:
+- `test_home_routes.py` - Home page tests
+- `test_auth_routes.py` - Authentication tests  
+- `test_group_routes.py` - Group management tests
+- `test_expense_routes.py` - Expense tests
+- `test_validators.py` - Validation utility tests
+- etc.
 
 ---
 
@@ -286,7 +306,8 @@ When you pick up a ticket, follow these steps:
 - Understand what needs to be done (backend + frontend)
 
 #### 2. Write Backend Test (TDD)
-- Open `tests/test_models.py` or `tests/test_routes.py`
+- Open the appropriate test file in `tests/` directory
+- Test files are organized by feature (e.g., `test_auth_routes.py`, `test_expense_routes.py`)
 - Write a test for the backend functionality
 - Test should **fail** initially (Red phase)
 
@@ -309,7 +330,8 @@ def test_delete_expense(client):
 
 Run test (should fail):
 ```bash
-uv run pytest tests/test_routes.py::test_delete_expense -v
+# Run test in specific file
+uv run pytest tests/test_expense_routes.py::test_delete_expense -v
 ```
 
 #### 3. Implement Backend Code
@@ -336,7 +358,7 @@ def delete_expense(expense_id):
 
 Run test again (should pass):
 ```bash
-uv run pytest tests/test_routes.py::test_delete_expense -v
+uv run pytest tests/test_expense_routes.py::test_delete_expense -v
 ```
 
 #### 4. Build Frontend UI
@@ -405,7 +427,7 @@ uv run ruff check .
 # 3. Run all tests
 uv run pytest -v
 
-# 4. Check test coverage (should be 80%+)
+# 4. Check test coverage (should be 85%+ per file, 90%+ overall)
 uv run pytest --cov=. --cov-report=term
 ```
 
@@ -531,16 +553,21 @@ Make sure you've done these:
 
 ### Minimum Coverage Targets
 
-- **Overall**: 80%+
-- **Models**: 80%+
-- **Routes**: 80%+
+- **Overall**: 90%+
+- **Per-file**: 85%+
+- **Models**: 85%+
+- **Routes**: 85%+
+- **Services**: 85%+
+- **Utilities**: 85%+
 - **Critical logic** (calculations): 100%
 
 ### Test Types to Write
 
-#### 1. Unit Tests (`test_models.py`)
+#### 1. Unit Tests (`test_models.py`, `test_validators.py`, `test_services.py`)
 - Test database models
 - Test data validation
+- Test business logic
+- Test utility functions
 - Test constraints
 
 Example:
@@ -556,10 +583,11 @@ def test_expense_requires_amount(app):
     db.session.rollback()
 ```
 
-#### 2. Integration Tests (`test_routes.py`)
+#### 2. Integration Tests (`test_*_routes.py`)
 - Test HTTP endpoints
 - Test form submissions
 - Test redirects
+- Organize by feature (auth, expense, group, etc.)
 
 Example:
 ```python
@@ -597,7 +625,8 @@ Always test:
 uv run pytest -v
 
 # Run specific test file
-uv run pytest tests/test_models.py -v
+uv run pytest tests/test_auth_routes.py -v
+uv run pytest tests/test_expense_routes.py -v
 
 # Run specific test
 uv run pytest tests/test_models.py::test_expense_with_category -v
@@ -605,9 +634,16 @@ uv run pytest tests/test_models.py::test_expense_with_category -v
 # Run tests matching pattern
 uv run pytest -k "expense" -v
 
+# Run tests for specific feature
+uv run pytest -k "auth" -v  # All auth-related tests
+uv run pytest -k "group" -v  # All group-related tests
+
 # Run with coverage
 uv run pytest --cov=. --cov-report=html
 open htmlcov/index.html  # View coverage report
+
+# Run specific test file with coverage
+uv run pytest tests/test_expense_routes.py --cov=routes.expenses
 ```
 
 ### Test Naming Convention
@@ -645,11 +681,12 @@ def test_example(client):
 Check these things:
 
 - [ ] **Tests**: Are tests included and passing?
-- [ ] **Coverage**: Does coverage meet 80%+?
+- [ ] **Coverage**: Does coverage meet 85%+ per file, 90%+ overall?
 - [ ] **Functionality**: Does the code actually work?
 - [ ] **Style**: Is code formatted properly?
 - [ ] **Security**: Any obvious security issues?
 - [ ] **Error Handling**: Are errors handled?
+- [ ] **Validation**: Are inputs validated properly?
 - [ ] **Screenshots**: If UI changed, are screenshots included?
 
 **Leave helpful comments:**
@@ -999,8 +1036,12 @@ git rebase develop
 # Run all tests
 uv run pytest -v
 
+# Run specific test file
+uv run pytest tests/test_auth_routes.py -v
+uv run pytest tests/test_expense_routes.py -v
+
 # Run specific test
-uv run pytest tests/test_models.py::test_name -v
+uv run pytest tests/test_name -v
 
 # Run with coverage
 uv run pytest --cov=. --cov-report=term
@@ -1174,13 +1215,14 @@ git reset --hard HEAD~1
 
 We measure success by:
 
-- ✅ **Test Coverage**: Maintain > 80%
+- ✅ **Test Coverage**: Maintain > 85% per file, > 90% overall
 - ✅ **CI Pass Rate**: > 95%
 - ✅ **PR Review Time**: < 24 hours average
 - ✅ **Deployment Frequency**: At least weekly
 - ✅ **Bug Rate**: < 5% of commits require hotfix
 - ✅ **Code Quality**: Zero linting errors
 - ✅ **Security**: Zero critical vulnerabilities
+- ✅ **Test Organization**: Tests match blueprint structure
 
 ---
 

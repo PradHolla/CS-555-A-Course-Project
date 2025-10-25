@@ -161,7 +161,16 @@ def test_expense_requires_description(app):
 def test_group_create_and_persist(app):
     """Test that Group model can be created and persisted to the database."""
     # Arrange
-    group = Group(name="Team Alpha", members="Alice, Bob, Charlie")
+    user1 = User(email="alice@example.com")
+    user2 = User(email="bob@example.com")
+    user3 = User(email="charlie@example.com")
+    db.session.add_all([user1, user2, user3])
+    db.session.commit()
+
+    group = Group(name="Team Alpha", created_by_id=user1.id)
+    group.members.append(user1)
+    group.members.append(user2)
+    group.members.append(user3)
 
     # Act
     db.session.add(group)
@@ -171,13 +180,20 @@ def test_group_create_and_persist(app):
     stored = Group.query.first()
     assert stored is not None
     assert stored.name == "Team Alpha"
-    assert stored.members == "Alice, Bob, Charlie"
+    assert len(stored.members) == 3
+    assert user1 in stored.members
+    assert user2 in stored.members
+    assert user3 in stored.members
 
 
 def test_group_requires_name(app):
     """Test that Group model raises IntegrityError when name is None."""
     # Arrange
-    group = Group(name=None, members="Alice, Bob")
+    user1 = User(email="alice@example.com")
+    db.session.add(user1)
+    db.session.commit()
+
+    group = Group(name=None, created_by_id=user1.id)
     db.session.add(group)
 
     # Act & Assert
@@ -193,7 +209,14 @@ def test_group_requires_name(app):
 def test_expense_group_relationship(app):
     """Test that Expense can be associated with a Group."""
     # Arrange
-    group = Group(name="Test Group", members="Alice, Bob")
+    user1 = User(email="alice@example.com")
+    user2 = User(email="bob@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)
+    group.members.append(user2)
     db.session.add(group)
     db.session.commit()
 
@@ -220,7 +243,14 @@ def test_expense_group_relationship(app):
 def test_expense_split_details_json_storage(app):
     """Test that split_details can store and retrieve JSON data."""
     # Arrange
-    group = Group(name="Test Group", members="Alice, Bob")
+    user1 = User(email="alice@example.com")
+    user2 = User(email="bob@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)
+    group.members.append(user2)
     db.session.add(group)
     db.session.commit()
 
@@ -246,7 +276,14 @@ def test_expense_split_details_json_storage(app):
 def test_expense_default_split_type(app):
     """Test that Expense defaults to 'equal' split_type."""
     # Arrange
-    group = Group(name="Test Group", members="Alice, Bob")
+    user1 = User(email="alice@example.com")
+    user2 = User(email="bob@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)
+    group.members.append(user2)
     db.session.add(group)
     db.session.commit()
 
@@ -264,7 +301,14 @@ def test_expense_default_split_type(app):
 def test_group_expenses_backref(app):
     """Test that Group.expenses backref works correctly."""
     # Arrange
-    group = Group(name="Test Group", members="Alice, Bob")
+    user1 = User(email="alice@example.com")
+    user2 = User(email="bob@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)
+    group.members.append(user2)
     db.session.add(group)
     db.session.commit()
 

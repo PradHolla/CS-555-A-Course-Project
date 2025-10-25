@@ -22,8 +22,9 @@ def create():
 
     notify_settlement_recipient(s)
 
+    payer_name = s.payer.display_name or s.payer.email
     flash(
-        f"Payment recorded. {s.payer.name} paid ${amount:.2f} to you. "
+        f"Payment recorded. {payer_name} paid ${amount:.2f} to you. "
         f"<a href='{url_for('settlements.detail', settlement_id=s.id)}'>View details</a>",
         "success",
     )

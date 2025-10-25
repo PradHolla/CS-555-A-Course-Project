@@ -2,16 +2,32 @@ from datetime import datetime, timezone
 
 from extensions import db
 
+# Association table for many-to-many relationship between Users and Groups
+group_members = db.Table(
+    "group_members",
+    db.Column("user_id", db.Integer, db.ForeignKey("user.id"), primary_key=True),
+    db.Column("group_id", db.Integer, db.ForeignKey("group.id"), primary_key=True),
+    db.Column("joined_at", db.DateTime, default=lambda: datetime.now(timezone.utc)),
+)
+
 
 class User(db.Model):
     """User model for authentication."""
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=True)
+    display_name = db.Column(db.String(100), nullable=True)  # User's display name for groups
     email = db.Column(db.String(200), nullable=False, unique=True)
     otp = db.Column(db.String(6), nullable=True)
     otp_expiry = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Many-to-many relationship with Groups
+    groups = db.relationship(
+        "Group",
+        secondary=group_members,
+        back_populates="members",
+        lazy="dynamic"
+    )
 
     def is_otp_valid(self, entered_otp):
         """Check if the entered OTP is valid and not expired."""
@@ -30,6 +46,9 @@ class User(db.Model):
             return False
 
         return True
+
+    def __repr__(self):
+        return f"<User {self.email}>"
 
 
 class Expense(db.Model):
@@ -67,5 +86,19 @@ class Settlement(db.Model):
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    members = db.Column(db.String(256), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)  # Who created the group
+
+    # Many-to-many relationship with Users
+    members = db.relationship(
+        "User",
+        secondary=group_members,
+        back_populates="groups",
+        lazy="select"
+    )
+
+    # Creator relationship
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+
+    def __repr__(self):
+        return f"<Group {self.name}>"

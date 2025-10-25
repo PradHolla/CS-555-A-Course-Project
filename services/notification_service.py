@@ -3,10 +3,11 @@ from flask import url_for
 
 def notify_settlement_recipient(settlement):
     payer, recipient = settlement.payer, settlement.recipient
-    subject = f"{payer.name} has paid ${settlement.amount:.2f} to you"
+    payer_name = payer.display_name or payer.email
+    subject = f"{payer_name} has paid ${settlement.amount:.2f} to you"
     detail_url = url_for("settlements.detail", settlement_id=settlement.id, _external=True)
     body = (
-        f"{payer.name} has paid ${settlement.amount:.2f} to you.\n\n"
+        f"{payer_name} has paid ${settlement.amount:.2f} to you.\n\n"
         f"Note: {settlement.note or '-'}\n"
         f"View details: {detail_url}\n"
     )
