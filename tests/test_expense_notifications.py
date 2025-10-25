@@ -271,3 +271,64 @@ def test_expense_notification_is_sent(client, app):
         assert mock_print.called
         printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         assert "diana@example.com" in printed_output or "eve@example.com" in printed_output
+
+
+def test_payer_does_not_receive_notification(client, app):
+    """Test that the payer does not receive a notification when they create an expense."""
+    # Arrange
+    from models import Group
+
+    with app.app_context():
+        payer = User(email="payer@example.com")
+        participant1 = User(email="participant1@example.com")
+        participant2 = User(email="participant2@example.com")
+        db.session.add_all([payer, participant1, participant2])
+        db.session.flush()
+
+        # Create a group with all members including payer
+        group = Group(name="Test Group", created_by_id=payer.id)
+        group.members.extend([payer, participant1, participant2])
+        db.session.add(group)
+        db.session.commit()
+
+        payer_id = payer.id
+        group_id = group.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer_id
+        sess["user_email"] = "payer@example.com"
+
+    # Act
+    with patch("routes.expenses.notify_expense_participants") as mock_notify:
+        response = client.post(
+            "/expense-splitter",
+            data={
+                "description": "Team lunch",
+                "amount": "90.00",
+                "payer": "payer@example.com",
+                "group_id": str(group_id),
+                "split_type": "equal",
+                "participants": [
+                    "payer@example.com",
+                    "participant1@example.com",
+                    "participant2@example.com",
+                ],
+            },
+            follow_redirects=False,
+        )
+
+        # Assert
+        assert response.status_code == 302  # Redirect after success
+        assert mock_notify.called
+
+        # Get the actual list of emails that were sent notifications
+        call_args = mock_notify.call_args
+        notified_emails = call_args[0][1]  # Second argument to notify_expense_participants
+
+        # Verify payer is NOT in the notification list
+        assert "payer@example.com" not in notified_emails
+        # Verify other participants ARE in the notification list
+        assert "participant1@example.com" in notified_emails
+        assert "participant2@example.com" in notified_emails
+        # Verify exactly 2 participants were notified (not 3)
+        assert len(notified_emails) == 2

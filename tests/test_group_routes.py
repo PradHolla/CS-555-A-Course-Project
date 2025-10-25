@@ -76,11 +76,11 @@ def test_groups_create_group_rejects_invalid_member_emails(client, app):
     }
 
     # Act
-    response = client.post("/groups/create", data=group_data, follow_redirects=False)
+    response = client.post("/groups/create", data=group_data, follow_redirects=True)
 
-    # Assert - should redirect back to groups page
-    assert response.status_code == 302
-    assert response.location == "/groups/"
+    # Assert - should redirect back to groups page with error message
+    assert response.status_code == 200
+    assert b"Invalid email format: notanemail" in response.data
     # Group should not have been created
     assert Group.query.filter_by(name="Invalid Email Group").first() is None
 

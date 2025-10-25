@@ -3,12 +3,20 @@
 from models import Expense, Group, User
 
 
-def test_expense_splitter_get_returns_ok(client):
+def test_expense_splitter_get_returns_ok(client, app):
     """Test that GET /expense-splitter returns a 200 status code."""
     # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
     # Create a logged-in user session
     with client.session_transaction() as session:
-        session["user_id"] = 1
+        session["user_id"] = user_id
         session["user_email"] = "test@example.com"
 
     # Act
@@ -422,7 +430,7 @@ def test_expense_splitter_validates_participants_in_group(client, app):
         "payer": "alice@example.com",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["Alice", "Charlie"],  # Charlie not in group
+        "participants": ["alice@example.com", "charlie@example.com"],  # Charlie not in group
     }
 
     # Act
@@ -783,7 +791,7 @@ def test_missing_description(client, app):
         "payer": "alice@example.com",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -801,7 +809,7 @@ def test_missing_group(client):
         "payer": "alice@example.com",
         "group_id": "",  # Missing
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -835,7 +843,7 @@ def test_missing_payer(client, app):
         "payer": "",  # Missing
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -869,7 +877,7 @@ def test_invalid_amount_nonpositive(client, app):
         "payer": "alice@example.com",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -903,7 +911,7 @@ def test_invalid_amount_type(client, app):
         "payer": "alice@example.com",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -921,7 +929,7 @@ def test_group_not_found(client):
         "payer": "alice@example.com",
         "group_id": "99999",  # Nonexistent group
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -952,10 +960,10 @@ def test_payer_not_in_group(client, app):
     data = {
         "description": "Trip",
         "amount": "50",
-        "payer": "notamember",
+        "payer": "notamember@example.com",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice"],
+        "participants": ["alice@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
@@ -1023,7 +1031,7 @@ def test_participant_not_in_group(client, app):
         "payer": "alice@example.com",
         "group_id": str(group.id),
         "split_type": "equal",
-        "participants": ["alice", "notamember"],
+        "participants": ["alice@example.com", "notamember@example.com"],
     }
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302

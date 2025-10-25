@@ -57,13 +57,11 @@ def expense_splitter():
             flash("Selected group not found", "error")
             return redirect(url_for("expenses.expense_splitter"))
 
-        # Get group member display names (or emails if no display name)
-        group_member_names = [
-            member.display_name or member.email for member in group.members
-        ]
+        # Get group member emails for validation
+        group_member_emails = [member.email for member in group.members]
 
         # Validate payer is in group
-        if payer not in group_member_names:
+        if payer not in group_member_emails:
             flash("Payer must be a member of the selected group", "error")
             return redirect(url_for("expenses.expense_splitter"))
 
@@ -77,7 +75,7 @@ def expense_splitter():
 
             # Validate all participants are in group
             for participant in selected_participants:
-                if participant not in group_member_names:
+                if participant not in group_member_emails:
                     flash(f"Participant '{participant}' is not in the selected group", "error")
                     return redirect(url_for("expenses.expense_splitter"))
 
@@ -87,14 +85,14 @@ def expense_splitter():
         else:  # custom split
             # Get custom split amounts
             split_details = {}
-            for member_name in group_member_names:
-                amount_key = f"custom_amount_{member_name}"
+            for member_email in group_member_emails:
+                amount_key = f"custom_amount_{member_email}"
                 custom_amount = request.form.get(amount_key, "").strip()
                 if custom_amount:
                     try:
-                        split_details[member_name] = float(custom_amount)
+                        split_details[member_email] = float(custom_amount)
                     except ValueError:
-                        flash(f"Invalid amount for {member_name}", "error")
+                        flash(f"Invalid amount for {member_email}", "error")
                         return redirect(url_for("expenses.expense_splitter"))
 
             if not split_details:
@@ -120,8 +118,8 @@ def expense_splitter():
         db.session.add(expense)
         db.session.commit()
 
-        # Send email notifications to participants
-        participant_list = list(split_details.keys())
+        # Send email notifications to participants (excluding the payer)
+        participant_list = [email for email in split_details.keys() if email != payer]
         if participant_list:
             try:
                 notify_expense_participants(expense, participant_list)

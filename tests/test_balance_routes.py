@@ -1,13 +1,21 @@
 """Tests for balance functionality."""
 
-from models import Expense
+from models import Expense, User
 
 
-def test_balance_summary_get_returns_ok(client):
+def test_balance_summary_get_returns_ok(client, app):
     """Test that GET /balance-summary returns a 200 status code."""
     # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
     with client.session_transaction() as session:
-        session["user_id"] = 1
+        session["user_id"] = user_id
         session["user_email"] = "test@example.com"
 
     # Act
@@ -22,8 +30,14 @@ def test_balance_summary_calculates_simple_balance(client, app):
     # Arrange
     from extensions import db
 
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
     with client.session_transaction() as session:
-        session["user_id"] = 1
+        session["user_id"] = user_id
         session["user_email"] = "test@example.com"
 
     # Alice paid $30 for Alice, Bob, Charlie (each owes Alice $10)
@@ -48,8 +62,14 @@ def test_balance_summary_calculates_multiple_expenses(client, app):
     # Arrange
     from extensions import db
 
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
     with client.session_transaction() as session:
-        session["user_id"] = 1
+        session["user_id"] = user_id
         session["user_email"] = "test@example.com"
 
     # Alice paid $30 for Alice, Bob, Charlie
@@ -73,10 +93,18 @@ def test_balance_summary_calculates_multiple_expenses(client, app):
     # Charlie owes $20 (Charlie paid $0, should pay $30 total)
 
 
-def test_balance_summary_with_no_expenses(client):
+def test_balance_summary_with_no_expenses(client, app):
     """Test that balance summary works with no expenses in database."""
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
     with client.session_transaction() as session:
-        session["user_id"] = 1
+        session["user_id"] = user_id
         session["user_email"] = "test@example.com"
     # Act
     response = client.get("/balance-summary")
@@ -100,8 +128,14 @@ def test_balance_summary_handles_expense_with_no_participants(client, app):
     # Arrange
     from extensions import db
 
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
     with client.session_transaction() as session:
-        session["user_id"] = 1
+        session["user_id"] = user_id
         session["user_email"] = "test@example.com"
 
     # Create expense with no participants (edge case)
