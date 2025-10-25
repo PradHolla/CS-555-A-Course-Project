@@ -360,19 +360,13 @@ def test_expense_splitter_validates_payer_in_group(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -406,19 +400,13 @@ def test_expense_splitter_validates_participants_in_group(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -452,22 +440,15 @@ def test_expense_splitter_creates_equal_split_expense(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     charlie = User(email="charlie@example.com")
 
-
     db.session.add_all([alice, bob, charlie])
-
 
     db.session.commit()
 
-
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob, charlie])
     db.session.add(group)
@@ -515,22 +496,15 @@ def test_expense_splitter_creates_custom_split_expense(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     charlie = User(email="charlie@example.com")
 
-
     db.session.add_all([alice, bob, charlie])
-
 
     db.session.commit()
 
-
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob, charlie])
     db.session.add(group)
@@ -576,19 +550,13 @@ def test_expense_splitter_rejects_custom_split_mismatch(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -623,19 +591,13 @@ def test_expense_splitter_rejects_custom_split_total_mismatch(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Test Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -670,38 +632,25 @@ def test_expense_splitter_filters_by_group(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     charlie = User(email="charlie@example.com")
 
-
     dave = User(email="dave@example.com")
-
 
     db.session.add_all([alice, bob, charlie, dave])
 
-
     db.session.commit()
-
-
 
     group1 = Group(name="Group 1", created_by_id=alice.id)
 
-
     group1.members.extend([alice, bob])
-
 
     db.session.add(group1)
 
-
     db.session.commit()
 
-
-
     group2 = Group(name="Group 2", created_by_id=charlie.id)
-
 
     group2.members.extend([charlie, dave])
     db.session.add_all([group1, group2])
@@ -747,38 +696,25 @@ def test_balance_summary_filters_by_group(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     charlie = User(email="charlie@example.com")
 
-
     dave = User(email="dave@example.com")
-
 
     db.session.add_all([alice, bob, charlie, dave])
 
-
     db.session.commit()
-
-
 
     group1 = Group(name="Group 1", created_by_id=alice.id)
 
-
     group1.members.extend([alice, bob])
-
 
     db.session.add(group1)
 
-
     db.session.commit()
 
-
-
     group2 = Group(name="Group 2", created_by_id=charlie.id)
-
 
     group2.members.extend([charlie, dave])
     db.session.add_all([group1, group2])
@@ -825,19 +761,13 @@ def test_missing_description(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -883,19 +813,13 @@ def test_missing_payer(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -923,19 +847,13 @@ def test_invalid_amount_nonpositive(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -963,19 +881,13 @@ def test_invalid_amount_type(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -1021,19 +933,13 @@ def test_payer_not_in_group(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -1061,19 +967,13 @@ def test_no_participants_selected(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -1101,19 +1001,13 @@ def test_participant_not_in_group(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -1141,19 +1035,13 @@ def test_invalid_custom_amount(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -1183,19 +1071,13 @@ def test_no_custom_split_details(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
@@ -1225,19 +1107,13 @@ def test_invalid_custom_split_sum(client, app):
 
     alice = User(email="alice@example.com")
 
-
     bob = User(email="bob@example.com")
-
 
     db.session.add_all([alice, bob])
 
-
     db.session.commit()
 
-
-
     group = Group(name="Fixture Group", created_by_id=alice.id)
-
 
     group.members.extend([alice, bob])
     db.session.add(group)
