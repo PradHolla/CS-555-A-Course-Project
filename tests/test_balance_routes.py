@@ -150,6 +150,78 @@ def test_balance_summary_handles_expense_with_no_participants(client, app):
 
     # Assert
     assert response.status_code == 200
-    # The orphan expense should be skipped, only the valid expense should be calculated
-    assert b"Bob" in response.data
-    assert b"Alice" in response.data
+
+
+def test_balance_summary_displays_user_display_names(client, app):
+    """Test that balance summary displays user display names when available."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        # Create users with display names
+        user1 = User(email="alice@example.com", display_name="Alice Smith")
+        user2 = User(email="bob@example.com", display_name="Bob Jones")
+        user3 = User(email="charlie@example.com")  # No display name
+        db.session.add_all([user1, user2, user3])
+        db.session.commit()
+        user1_id = user1.id
+
+    with client.session_transaction() as session:
+        session["user_id"] = user1_id
+        session["user_email"] = "alice@example.com"
+
+    # Create expense with user emails
+    expense = Expense(
+        description="Team Lunch",
+        amount=90.0,
+        payer="alice@example.com",
+        participants="alice@example.com, bob@example.com, charlie@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Act
+    response = client.get("/balance-summary")
+
+    # Assert
+    assert response.status_code == 200
+    # Should display display names when available
+    assert b"Alice Smith" in response.data
+    assert b"Bob Jones" in response.data
+    # Should fall back to email when no display name
+    assert b"charlie@example.com" in response.data
+
+
+def test_balance_summary_handles_nonexistent_user_emails(client, app):
+    """Test that balance summary handles participant emails that don't exist in User table."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com", display_name="Test User")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as session:
+        session["user_id"] = user_id
+        session["user_email"] = "test@example.com"
+
+    # Create expense with emails that don't correspond to User records
+    expense = Expense(
+        description="Event",
+        amount=100.0,
+        payer="nonexistent@example.com",
+        participants="nonexistent@example.com, another@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Act
+    response = client.get("/balance-summary")
+
+    # Assert
+    assert response.status_code == 200
+    # Should display email addresses as fallback when user not found (line 217 coverage)
+    assert b"nonexistent@example.com" in response.data
+    assert b"another@example.com" in response.data

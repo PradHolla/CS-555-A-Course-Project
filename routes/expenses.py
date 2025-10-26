@@ -210,9 +210,13 @@ def balance_summary():
         all_emails.add(transaction["from"])
         all_emails.add(transaction["to"])
 
+    # Bulk fetch all users for the emails to avoid N+1 queries
+    users = User.query.filter(User.email.in_(all_emails)).all()
+    user_map = {user.email: user for user in users}
+
     email_to_name = {}
     for email in all_emails:
-        user = User.query.filter_by(email=email).first()
+        user = user_map.get(email)
         if user:
             email_to_name[email] = user.display_name or user.email
         else:
