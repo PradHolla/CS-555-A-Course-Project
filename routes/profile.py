@@ -15,11 +15,7 @@ def view_profile():
     """Display the user's profile page."""
     user_id = session.get("user_id")
     user = db.session.get(User, user_id)
-
-    if not user:
-        flash("User not found", "error")
-        return redirect(url_for("home.index"))
-
+    # User existence is guaranteed by @login_required decorator
     return render_template("profile/index.html", user=user)
 
 
@@ -29,10 +25,7 @@ def update_profile():
     """Update the user's display name."""
     user_id = session.get("user_id")
     user = db.session.get(User, user_id)
-
-    if not user:
-        flash("User not found", "error")
-        return redirect(url_for("home.index"))
+    # User existence is guaranteed by @login_required decorator
 
     display_name = request.form.get("display_name", "").strip()
 

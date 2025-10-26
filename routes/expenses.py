@@ -5,7 +5,7 @@ import json
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from extensions import db
-from models import Expense, Group
+from models import Expense, Group, User
 from services.expense_service import ExpenseService
 from services.notification_service import notify_expense_participants
 from utils.decorators import login_required
@@ -192,8 +192,6 @@ def expense_splitter():
 @login_required
 def balance_summary():
     """Display balance summary showing who owes whom across all expenses."""
-    from models import User
-
     # Get group filter if specified
     group_id = request.args.get("group_id")
 

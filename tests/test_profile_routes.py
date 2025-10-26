@@ -198,6 +198,36 @@ def test_profile_displays_groups_count(client, app):
     assert b">2<" in response.data or b"2</span>" in response.data
 
 
+def test_profile_update_handles_database_error(client, app, monkeypatch):
+    """Test that POST /profile handles database commit errors gracefully."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com", display_name="Original Name")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as session:
+        session["user_id"] = user_id
+        session["user_email"] = "test@example.com"
+
+    # Mock db.session.commit to raise an exception
+    def mock_commit():
+        raise Exception("Database error")
+
+    monkeypatch.setattr("extensions.db.session.commit", mock_commit)
+
+    # Act
+    response = client.post("/profile/", data={"display_name": "New Name"}, follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Failed to update profile" in response.data
+    assert b"Database error" in response.data
+
+
 def test_profile_view_with_no_display_name(client, app):
     """Test that profile page works for users without display name set."""
     # Arrange
