@@ -20,6 +20,6 @@ def is_valid_email(email):
     # Matches: user@domain.com, user.name@domain.co.uk, a@b.co, etc.
     # Rejects: consecutive dots, leading/trailing dots, missing @ or domain
     # Allow single character usernames and domains
-    pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$'
+    pattern = r"^[a-zA-Z0-9]([a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$"
 
     return re.match(pattern, email) is not None

@@ -5,7 +5,7 @@ import json
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from extensions import db
-from models import Expense, Group
+from models import Expense, Group, User
 from services.expense_service import ExpenseService
 from services.notification_service import notify_expense_participants
 from utils.decorators import login_required
@@ -145,6 +145,7 @@ def expense_splitter():
 
     # Process expenses for display
     expense_views = []
+    all_emails = set()
     for expense in expenses:
         split_details = ExpenseService._parse_split_details(expense)
         participants = list(split_details.keys())
@@ -161,13 +162,38 @@ def expense_splitter():
                 "split_details": split_details,
             }
         )
+        # Collect all emails for display name lookup
+        all_emails.add(expense.payer)
+        all_emails.update(participants)
+
+    # Bulk fetch all users for the emails to avoid N+1 queries
+    if all_emails:
+        users = User.query.filter(User.email.in_(all_emails)).all()
+        user_map = {user.email: user for user in users}
+    else:
+        users = []
+        user_map = {}
+
+    email_to_name = {}
+    for email in all_emails:
+        user = user_map.get(email)
+        if user:
+            email_to_name[email] = user.display_name or user.email
+        else:
+            email_to_name[email] = email  # Fallback to email if user not found
 
     # Convert groups to JSON-serializable format with member names
     groups_data = [
         {
             "id": group.id,
             "name": group.name,
-            "members": ", ".join([m.display_name or m.email for m in group.members]),
+            "members": [
+                {
+                    "email": m.email,
+                    "display_name": m.display_name or m.email,
+                }
+                for m in group.members
+            ],
         }
         for group in groups
     ]
@@ -179,6 +205,7 @@ def expense_splitter():
         groups=groups,
         groups_data=groups_data,
         selected_group_id=selected_group_id,
+        email_to_name=email_to_name,
     )
 
 
@@ -198,6 +225,28 @@ def balance_summary():
     # Calculate balances using the service
     balance_data = ExpenseService.calculate_balances(expenses)
 
+    # Create mapping of email to display name
+    all_emails = set(balance_data["balances"].keys())
+    for transaction in balance_data["transactions"]:
+        all_emails.add(transaction["from"])
+        all_emails.add(transaction["to"])
+
+    # Bulk fetch all users for the emails to avoid N+1 queries
+    if all_emails:
+        users = User.query.filter(User.email.in_(all_emails)).all()
+        user_map = {user.email: user for user in users}
+    else:
+        users = []
+        user_map = {}
+
+    email_to_name = {}
+    for email in all_emails:
+        user = user_map.get(email)
+        if user:
+            email_to_name[email] = user.display_name or user.email
+        else:
+            email_to_name[email] = email  # Fallback to email if user not found
+
     # Get groups for the filter dropdown
     groups = Group.query.all()
     groups_data = [
@@ -209,6 +258,7 @@ def balance_summary():
         page_id="balance-summary",
         balances=balance_data["balances"],
         transactions=balance_data["transactions"],
+        email_to_name=email_to_name,
         groups=groups,
         groups_data=groups_data,
         selected_group_id=group_id,

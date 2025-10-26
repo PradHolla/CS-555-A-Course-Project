@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Expense Splitter{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-6 space-y-3">
+                {% for category, message in messages %}
+                    {% if category == 'error' %}
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg shadow-sm animate-fade-in" role="alert">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>{{ message }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-r-lg shadow-sm animate-fade-in" role="alert">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>{{ message }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Header -->
+    <div class="mb-8">
+        <h2 class="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent mb-2">
+            USER.PROFILE
+        </h2>
+        <p class="text-gray-400 font-mono text-sm">
+            <span class="text-cyan-400">></span> Manage your display name and profile information
+        </p>
+    </div>
+
+    <!-- Profile Card -->
+    <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-cyan-500/20 overflow-hidden">
+        <!-- Card Header -->
+        <div class="bg-gradient-to-r from-cyan-500/10 to-teal-500/10 border-b border-cyan-500/20 px-6 py-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-bold text-white font-mono flex items-center gap-3">
+                    <span class="text-cyan-400">[</span>
+                    PROFILE.EDIT
+                    <span class="text-cyan-400">]</span>
+                </h3>
+                <span class="text-xs font-mono text-cyan-400 bg-cyan-400/10 px-3 py-1 rounded-full border border-cyan-400/20">
+                    TERMINAL.USER.CONFIG
+                </span>
+            </div>
+        </div>
+
+        <!-- Profile Form -->
+        <form method="POST" action="{{ url_for('profile.update_profile') }}" class="p-6 space-y-6">
+            <!-- Email (Read-only) -->
+            <div>
+                <label class="block text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">Email Address</label>
+                <div class="w-full px-4 py-3 bg-slate-950/50 border border-gray-600/30 rounded-lg font-mono text-gray-400">
+                    {{ user.email }}
+                </div>
+                <p class="block text-xs text-gray-500 mt-1">Your email cannot be changed</p>
+            </div>
+
+            <!-- Display Name (Editable) -->
+            <div>
+                <label for="display_name" class="block text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">Display Name *</label>
+                <input 
+                    type="text" 
+                    id="display_name" 
+                    name="display_name"
+                    value="{{ user.display_name or '' }}"
+                    class="w-full px-4 py-3 bg-slate-950/50 border border-cyan-500/30 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200 font-mono text-white placeholder-gray-500"
+                    placeholder="Enter your display name..."
+                    maxlength="100"
+                    required>
+                <p class="block text-xs text-gray-400 mt-1">This name will be visible to other members in your groups</p>
+            </div>
+
+            <!-- Account Info -->
+            <div class="bg-slate-950/30 border border-cyan-500/10 rounded-lg p-4">
+                <h4 class="text-sm font-mono text-cyan-400 mb-3 uppercase tracking-wider">Account Information</h4>
+                <div class="space-y-2 text-sm font-mono text-gray-400">
+                    <div class="flex justify-between">
+                        <span>Member Since:</span>
+                        <span class="text-gray-300">{{ user.created_at.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Groups:</span>
+                        <span class="text-gray-300">{{ user.groups.count() }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button 
+                type="submit"
+                class="w-full bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-900 py-3 rounded-lg font-bold hover:from-cyan-400 hover:to-teal-400 transform hover:scale-[1.02] transition-all duration-200 shadow-lg uppercase tracking-wider flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                SAVE CHANGES
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

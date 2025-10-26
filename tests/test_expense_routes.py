@@ -1139,3 +1139,48 @@ def test_invalid_custom_split_sum(client, app):
     resp = client.post("/expense-splitter", data=data, follow_redirects=False)
     assert resp.status_code == 302
     assert Expense.query.count() == 0
+
+
+def test_expense_splitter_displays_user_display_names(client, app):
+    """Test that the transaction log shows display names instead of emails."""
+    from extensions import db
+
+    # Create users with display names
+    alice = User(email="alice@example.com", display_name="Alice Smith")
+    bob = User(email="bob@example.com", display_name="Bob Jones")
+    db.session.add_all([alice, bob])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alice.id)
+    group.members.extend([alice, bob])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create an expense
+    expense = Expense(
+        description="Lunch",
+        amount=20.0,
+        payer="alice@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"alice@example.com": 10.0, "bob@example.com": 10.0}',
+        participants="alice@example.com, bob@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Login as alice
+    with client.session_transaction() as session:
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
+
+    # Get the expense splitter page
+    response = client.get("/expense-splitter")
+    assert response.status_code == 200
+
+    # Check that display names are shown instead of emails
+    assert b"Alice Smith" in response.data
+    assert b"Bob Jones" in response.data
+    # Emails should not be visible as standalone text (they're in email_to_name mapping)
+    # Note: emails still exist in HTML attributes and data structures, so we check for display names
+

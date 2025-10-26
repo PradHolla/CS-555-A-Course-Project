@@ -205,7 +205,7 @@
                             <h4 class="font-semibold text-gray-900">{{ expense.description }}</h4>
                             <div class="flex items-center gap-2 mt-1">
                                 <span class="text-xs font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
-                                    @{{ expense.payer }}
+                                    @{{ email_to_name.get(expense.payer, expense.payer) }}
                                 </span>
                                 {% if expense.group %}
                                 <span class="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
@@ -230,14 +230,14 @@
                                 <div class="flex flex-wrap gap-1">
                                     {% for p in item.participants %}
                                         <span class="text-xs font-mono bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
-                                            @{{ p }}
+                                            @{{ email_to_name.get(p, p) }}
                                         </span>
                                     {% endfor %}
                                 </div>
                                 {% if item.split_details %}
                                     <div class="text-sm font-mono text-gray-600">
                                         {% for participant, amount in item.split_details.items() %}
-                                            <span class="block">{{ participant }}: ${{ '%.2f' % amount }}</span>
+                                            <span class="block">{{ email_to_name.get(participant, participant) }}: ${{ '%.2f' % amount }}</span>
                                         {% endfor %}
                                     </div>
                                 {% elif item.share is not none %}
@@ -300,14 +300,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const group = groups.find(g => g.id == groupId);
         
         if (group) {
-            const members = group.members.split(',').map(m => m.trim());
+            const members = group.members;
             
             // Update payer dropdown
             payerSelect.innerHTML = '<option value="">Select payer...</option>';
             members.forEach(member => {
                 const option = document.createElement('option');
-                option.value = member;
-                option.textContent = member;
+                option.value = member.email;
+                option.textContent = member.display_name;
                 payerSelect.appendChild(option);
             });
             
@@ -317,8 +317,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
                 div.innerHTML = `
-                    <input type="checkbox" name="participants" value="${member}" id="participant_${member}" class="mr-2" checked>
-                    <label for="participant_${member}" class="text-sm">${member}</label>
+                    <input type="checkbox" name="participants" value="${member.email}" id="participant_${member.email}" class="mr-2" checked>
+                    <label for="participant_${member.email}" class="text-sm">${member.display_name}</label>
                 `;
                 participantsList.appendChild(div);
             });
@@ -329,8 +329,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const div = document.createElement('div');
                 div.className = 'flex items-center gap-2';
                 div.innerHTML = `
-                    <label class="text-sm w-20">${member}:</label>
-                    <input type="number" name="custom_amount_${member}" step="0.01" min="0" 
+                    <label class="text-sm w-20">${member.display_name}:</label>
+                    <input type="number" name="custom_amount_${member.email}" step="0.01" min="0" 
                            class="flex-1 px-2 py-1 bg-slate-950/50 border border-cyan-500/30 rounded text-sm custom-amount-input">
                 `;
                 customAmountsList.appendChild(div);
