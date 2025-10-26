@@ -145,6 +145,7 @@ def expense_splitter():
 
     # Process expenses for display
     expense_views = []
+    all_emails = set()
     for expense in expenses:
         split_details = ExpenseService._parse_split_details(expense)
         participants = list(split_details.keys())
@@ -161,6 +162,21 @@ def expense_splitter():
                 "split_details": split_details,
             }
         )
+        # Collect all emails for display name lookup
+        all_emails.add(expense.payer)
+        all_emails.update(participants)
+
+    # Bulk fetch all users for the emails to avoid N+1 queries
+    users = User.query.filter(User.email.in_(all_emails)).all()
+    user_map = {user.email: user for user in users}
+
+    email_to_name = {}
+    for email in all_emails:
+        user = user_map.get(email)
+        if user:
+            email_to_name[email] = user.display_name or user.email
+        else:
+            email_to_name[email] = email  # Fallback to email if user not found
 
     # Convert groups to JSON-serializable format with member names
     groups_data = [
@@ -185,6 +201,7 @@ def expense_splitter():
         groups=groups,
         groups_data=groups_data,
         selected_group_id=selected_group_id,
+        email_to_name=email_to_name,
     )
 
 

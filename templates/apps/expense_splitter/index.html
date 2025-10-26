@@ -205,7 +205,7 @@
                             <h4 class="font-semibold text-gray-900">{{ expense.description }}</h4>
                             <div class="flex items-center gap-2 mt-1">
                                 <span class="text-xs font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
-                                    @{{ expense.payer }}
+                                    @{{ email_to_name.get(expense.payer, expense.payer) }}
                                 </span>
                                 {% if expense.group %}
                                 <span class="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
@@ -230,14 +230,14 @@
                                 <div class="flex flex-wrap gap-1">
                                     {% for p in item.participants %}
                                         <span class="text-xs font-mono bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">
-                                            @{{ p }}
+                                            @{{ email_to_name.get(p, p) }}
                                         </span>
                                     {% endfor %}
                                 </div>
                                 {% if item.split_details %}
                                     <div class="text-sm font-mono text-gray-600">
                                         {% for participant, amount in item.split_details.items() %}
-                                            <span class="block">{{ participant }}: ${{ '%.2f' % amount }}</span>
+                                            <span class="block">{{ email_to_name.get(participant, participant) }}: ${{ '%.2f' % amount }}</span>
                                         {% endfor %}
                                     </div>
                                 {% elif item.share is not none %}
