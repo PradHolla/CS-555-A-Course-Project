@@ -167,8 +167,12 @@ def expense_splitter():
         all_emails.update(participants)
 
     # Bulk fetch all users for the emails to avoid N+1 queries
-    users = User.query.filter(User.email.in_(all_emails)).all()
-    user_map = {user.email: user for user in users}
+    if all_emails:
+        users = User.query.filter(User.email.in_(all_emails)).all()
+        user_map = {user.email: user for user in users}
+    else:
+        users = []
+        user_map = {}
 
     email_to_name = {}
     for email in all_emails:
@@ -228,8 +232,12 @@ def balance_summary():
         all_emails.add(transaction["to"])
 
     # Bulk fetch all users for the emails to avoid N+1 queries
-    users = User.query.filter(User.email.in_(all_emails)).all()
-    user_map = {user.email: user for user in users}
+    if all_emails:
+        users = User.query.filter(User.email.in_(all_emails)).all()
+        user_map = {user.email: user for user in users}
+    else:
+        users = []
+        user_map = {}
 
     email_to_name = {}
     for email in all_emails:

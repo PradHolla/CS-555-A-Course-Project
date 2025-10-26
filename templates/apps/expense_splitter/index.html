@@ -306,8 +306,8 @@ document.addEventListener('DOMContentLoaded', function() {
             payerSelect.innerHTML = '<option value="">Select payer...</option>';
             members.forEach(member => {
                 const option = document.createElement('option');
-                option.value = member.email;  // Submit email for backend validation
-                option.textContent = member.display_name;  // Show display name to user
+                option.value = member.email;
+                option.textContent = member.display_name;
                 payerSelect.appendChild(option);
             });
             
