@@ -167,7 +167,13 @@ def expense_splitter():
         {
             "id": group.id,
             "name": group.name,
-            "members": ", ".join([m.display_name or m.email for m in group.members]),
+            "members": [
+                {
+                    "email": m.email,
+                    "display_name": m.display_name or m.email,
+                }
+                for m in group.members
+            ],
         }
         for group in groups
     ]
@@ -186,6 +192,8 @@ def expense_splitter():
 @login_required
 def balance_summary():
     """Display balance summary showing who owes whom across all expenses."""
+    from models import User
+
     # Get group filter if specified
     group_id = request.args.get("group_id")
 
@@ -198,6 +206,20 @@ def balance_summary():
     # Calculate balances using the service
     balance_data = ExpenseService.calculate_balances(expenses)
 
+    # Create mapping of email to display name
+    all_emails = set(balance_data["balances"].keys())
+    for transaction in balance_data["transactions"]:
+        all_emails.add(transaction["from"])
+        all_emails.add(transaction["to"])
+
+    email_to_name = {}
+    for email in all_emails:
+        user = User.query.filter_by(email=email).first()
+        if user:
+            email_to_name[email] = user.display_name or user.email
+        else:
+            email_to_name[email] = email  # Fallback to email if user not found
+
     # Get groups for the filter dropdown
     groups = Group.query.all()
     groups_data = [
@@ -209,6 +231,7 @@ def balance_summary():
         page_id="balance-summary",
         balances=balance_data["balances"],
         transactions=balance_data["transactions"],
+        email_to_name=email_to_name,
         groups=groups,
         groups_data=groups_data,
         selected_group_id=group_id,

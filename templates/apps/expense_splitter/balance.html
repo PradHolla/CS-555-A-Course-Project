@@ -89,7 +89,7 @@
     {% for person, balance in balances.items()|sort(attribute='1', reverse=true) %}
     <div class="slide-in {% if balance > 0.01 %}balance-positive{% elif balance < -0.01 %}balance-negative{% else %}balance-neutral{% endif %} rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow duration-200">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-bold text-gray-900">{{ person }}</h3>
+            <h3 class="text-lg font-bold text-gray-900">{{ email_to_name[person] }}</h3>
             <div class="p-2 bg-white rounded-full shadow-sm">
                 {% if balance > 0.01 %}
                 <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,7 +161,7 @@
                         <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                         </svg>
-                        {{ transaction.from }}
+                        {{ email_to_name[transaction.from] }}
                     </div>
                     <div class="flex items-center gap-2">
                         <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +178,7 @@
                         <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                         </svg>
-                        {{ transaction.to }}
+                        {{ email_to_name[transaction.to] }}
                     </div>
                 </div>
             </div>

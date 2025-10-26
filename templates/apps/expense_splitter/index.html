@@ -300,14 +300,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const group = groups.find(g => g.id == groupId);
         
         if (group) {
-            const members = group.members.split(',').map(m => m.trim());
+            const members = group.members;
             
             // Update payer dropdown
             payerSelect.innerHTML = '<option value="">Select payer...</option>';
             members.forEach(member => {
                 const option = document.createElement('option');
-                option.value = member;
-                option.textContent = member;
+                option.value = member.email;  // Submit email for backend validation
+                option.textContent = member.display_name;  // Show display name to user
                 payerSelect.appendChild(option);
             });
             
@@ -317,8 +317,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
                 div.innerHTML = `
-                    <input type="checkbox" name="participants" value="${member}" id="participant_${member}" class="mr-2" checked>
-                    <label for="participant_${member}" class="text-sm">${member}</label>
+                    <input type="checkbox" name="participants" value="${member.email}" id="participant_${member.email}" class="mr-2" checked>
+                    <label for="participant_${member.email}" class="text-sm">${member.display_name}</label>
                 `;
                 participantsList.appendChild(div);
             });
@@ -329,8 +329,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const div = document.createElement('div');
                 div.className = 'flex items-center gap-2';
                 div.innerHTML = `
-                    <label class="text-sm w-20">${member}:</label>
-                    <input type="number" name="custom_amount_${member}" step="0.01" min="0" 
+                    <label class="text-sm w-20">${member.display_name}:</label>
+                    <input type="number" name="custom_amount_${member.email}" step="0.01" min="0" 
                            class="flex-1 px-2 py-1 bg-slate-950/50 border border-cyan-500/30 rounded text-sm custom-amount-input">
                 `;
                 customAmountsList.appendChild(div);
