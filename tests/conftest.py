@@ -73,7 +73,9 @@ def create_user_with_group(name, member_names, created_by_email="creator@example
         Tuple of (group, creator_user, list of member users)
     """
     # Create creator
-    creator = User(email=created_by_email, display_name=member_names[0] if member_names else "Creator")
+    creator = User(
+        email=created_by_email, display_name=member_names[0] if member_names else "Creator"
+    )
     db.session.add(creator)
     db.session.flush()  # Get the creator ID
 

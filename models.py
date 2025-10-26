@@ -23,10 +23,7 @@ class User(db.Model):
 
     # Many-to-many relationship with Groups
     groups = db.relationship(
-        "Group",
-        secondary=group_members,
-        back_populates="members",
-        lazy="dynamic"
+        "Group", secondary=group_members, back_populates="members", lazy="dynamic"
     )
 
     def is_otp_valid(self, entered_otp):
@@ -87,14 +84,13 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)  # Who created the group
+    created_by_id = db.Column(
+        db.Integer, db.ForeignKey("user.id"), nullable=False
+    )  # Who created the group
 
     # Many-to-many relationship with Users
     members = db.relationship(
-        "User",
-        secondary=group_members,
-        back_populates="groups",
-        lazy="select"
+        "User", secondary=group_members, back_populates="groups", lazy="select"
     )
 
     # Creator relationship

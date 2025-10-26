@@ -54,9 +54,7 @@ def test_profile_update_display_name(client, app):
         session["user_email"] = "test@example.com"
 
     # Act
-    response = client.post(
-        "/profile/", data={"display_name": "New Name"}, follow_redirects=True
-    )
+    response = client.post("/profile/", data={"display_name": "New Name"}, follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -72,9 +70,7 @@ def test_profile_update_display_name(client, app):
 def test_profile_update_requires_login(client):
     """Test that POST /profile redirects to login when not authenticated."""
     # Act
-    response = client.post(
-        "/profile/", data={"display_name": "New Name"}, follow_redirects=False
-    )
+    response = client.post("/profile/", data={"display_name": "New Name"}, follow_redirects=False)
 
     # Assert
     assert response.status_code == 302
@@ -97,9 +93,7 @@ def test_profile_update_rejects_empty_display_name(client, app):
         session["user_email"] = "test@example.com"
 
     # Act
-    response = client.post(
-        "/profile/", data={"display_name": "   "}, follow_redirects=True
-    )
+    response = client.post("/profile/", data={"display_name": "   "}, follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -128,9 +122,7 @@ def test_profile_update_rejects_too_long_display_name(client, app):
 
     # Act - 101 character name
     long_name = "A" * 101
-    response = client.post(
-        "/profile/", data={"display_name": long_name}, follow_redirects=True
-    )
+    response = client.post("/profile/", data={"display_name": long_name}, follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -159,9 +151,7 @@ def test_profile_update_allows_max_length_display_name(client, app):
 
     # Act - Exactly 100 characters
     max_name = "A" * 100
-    response = client.post(
-        "/profile/", data={"display_name": max_name}, follow_redirects=True
-    )
+    response = client.post("/profile/", data={"display_name": max_name}, follow_redirects=True)
 
     # Assert
     assert response.status_code == 200

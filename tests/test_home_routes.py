@@ -1,5 +1,6 @@
 """Tests for home route."""
 
+
 def test_home_page_returns_ok(client):
     """Test that GET / returns 200."""
     # Act
