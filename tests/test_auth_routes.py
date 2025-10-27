@@ -153,6 +153,64 @@ def test_logout_clears_session(client, app):
     # Assert
     assert response.status_code == 302
     assert response.location == "/"
+    # Check session cleared
+    with client.session_transaction() as sess:
+        assert "user_id" not in sess
+        assert "user_email" not in sess
+
+
+def test_verify_otp_auto_accepts_pending_invitations(client, app):
+    """Test that verifying OTP auto-accepts pending group invitations."""
+    # Arrange
+    from datetime import datetime, timedelta, timezone
+
+    from extensions import db
+    from models import Group, GroupInvitation
+
+    # Create inviter and group
+    inviter = User(email="inviter@example.com")
+    db.session.add(inviter)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=inviter.id)
+    group.members.append(inviter)
+    db.session.add(group)
+    db.session.commit()
+
+    # Create pending invitation for new user
+    invitation = GroupInvitation(
+        email="newuser@example.com", group_id=group.id, invited_by_id=inviter.id
+    )
+    db.session.add(invitation)
+    db.session.commit()
+
+    # Create new user with OTP (simulating signup)
+    new_user = User(email="newuser@example.com")
+    new_user.otp = "123456"
+    new_user.otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
+    db.session.add(new_user)
+    db.session.commit()
+
+    verify_data = {"email": "newuser@example.com", "otp": "123456"}
+
+    # Act
+    response = client.post("/auth/verify-otp", data=verify_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+
+    # Check user was added to group
+    db.session.refresh(group)
+    assert new_user in group.members
+
+    # Check invitation status updated
+    db.session.refresh(invitation)
+    assert invitation.status == "accepted"
+    response = client.get("/auth/logout", follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+    assert response.location == "/"
     with client.session_transaction() as sess:
         assert "user_id" not in sess
         assert "user_email" not in sess

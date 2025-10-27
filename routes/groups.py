@@ -60,6 +60,9 @@ def create_group():
         # Add creator as first member
         group.members.append(creator)
 
+        # Flush to get group.id for invitation creation
+        db.session.flush()
+
         # Add other members if emails provided
         if member_emails:
             emails = [email.strip() for email in member_emails.split(",") if email.strip()]

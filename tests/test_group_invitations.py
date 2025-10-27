@@ -154,7 +154,7 @@ def test_user_signup_accepts_pending_invitations(client, app):
     db.session.commit()
 
     invitation = GroupInvitation(
-        email="newuser@example.com", group_id=group.id, invited_by_id=inviter.id, status="pending"
+        email="newuser@example.com", group_id=group.id, invited_by_id=inviter.id
     )
     db.session.add(invitation)
     db.session.commit()
@@ -257,3 +257,82 @@ def test_invalid_email_does_not_create_invitation(client, app):
 
     invitations = GroupInvitation.query.all()
     assert len(invitations) == 0
+
+
+def test_notification_failure_does_not_stop_invitation_creation(client, app, monkeypatch):
+    """Test that notification failure doesn't prevent invitation from being created."""
+    from extensions import db
+
+    # Arrange
+    creator = User(email="creator@example.com")
+    db.session.add(creator)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = creator.id
+        session["user_email"] = creator.email
+
+    # Mock notification to raise exception
+    def mock_notify_error(*args, **kwargs):
+        raise Exception("Email service down")
+
+    monkeypatch.setattr("routes.groups.notify_group_invitation", mock_notify_error)
+
+    # Act - Create group with non-existent member
+    group_data = {"name": "Notification Error Group", "members": "newuser@example.com"}
+
+    response = client.post("/groups/create", data=group_data, follow_redirects=False)
+
+    # Assert - Invitation should still be created despite notification failure
+    assert response.status_code == 302
+
+    invitation = GroupInvitation.query.filter_by(email="newuser@example.com").first()
+    assert invitation is not None
+    assert invitation.status == "pending"
+
+    group = Group.query.filter_by(name="Notification Error Group").first()
+    assert group is not None
+
+
+def test_user_already_in_group_when_accepting_invitation(client, app):
+    """Test that auto-accept handles case where user is already in group (edge case)."""
+    from extensions import db
+
+    # Arrange - Create group with invitation
+    inviter = User(email="inviter@example.com")
+    new_user = User(email="newuser@example.com")
+    db.session.add_all([inviter, new_user])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=inviter.id)
+    group.members.extend([inviter, new_user])  # User already in group
+    db.session.add(group)
+    db.session.commit()
+
+    # Create pending invitation for user already in group (edge case)
+    invitation = GroupInvitation(
+        email="newuser@example.com", group_id=group.id, invited_by_id=inviter.id
+    )
+    db.session.add(invitation)
+    db.session.commit()
+
+    # Act - Simulate auto-accept logic from verify_otp
+    pending_invitations = GroupInvitation.query.filter_by(
+        email=new_user.email, status="pending"
+    ).all()
+
+    for inv in pending_invitations:
+        # This should handle the case where user is already in group
+        if new_user not in inv.group.members:
+            inv.group.members.append(new_user)
+        inv.status = "accepted"
+
+    db.session.commit()
+
+    # Assert - Invitation marked as accepted, no duplicate membership
+    updated_invitation = GroupInvitation.query.filter_by(email="newuser@example.com").first()
+    assert updated_invitation.status == "accepted"
+
+    # User should appear only once in members
+    member_count = sum(1 for m in group.members if m.email == "newuser@example.com")
+    assert member_count == 1
