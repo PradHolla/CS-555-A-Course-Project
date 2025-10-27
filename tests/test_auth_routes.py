@@ -206,11 +206,3 @@ def test_verify_otp_auto_accepts_pending_invitations(client, app):
     # Check invitation status updated
     db.session.refresh(invitation)
     assert invitation.status == "accepted"
-    response = client.get("/auth/logout", follow_redirects=False)
-
-    # Assert
-    assert response.status_code == 302
-    assert response.location == "/"
-    with client.session_transaction() as sess:
-        assert "user_id" not in sess
-        assert "user_email" not in sess

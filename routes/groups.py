@@ -60,7 +60,8 @@ def create_group():
         # Add creator as first member
         group.members.append(creator)
 
-        # Flush to get group.id for invitation creation
+        # Flush to assign group.id before checking for existing invitations
+        # The duplicate check query (lines 84-86) requires group.id to be set
         db.session.flush()
 
         # Add other members if emails provided
