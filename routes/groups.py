@@ -1,7 +1,8 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from extensions import db
-from models import Group, User
+from models import Group, GroupInvitation, User
+from services.notification_service import notify_group_invitation
 from utils.decorators import login_required
 from utils.validators import is_valid_email
 
@@ -59,6 +60,10 @@ def create_group():
         # Add creator as first member
         group.members.append(creator)
 
+        # Flush to assign group.id before checking for existing invitations
+        # The duplicate check query (lines 84-86) requires group.id to be set
+        db.session.flush()
+
         # Add other members if emails provided
         if member_emails:
             emails = [email.strip() for email in member_emails.split(",") if email.strip()]
@@ -67,15 +72,31 @@ def create_group():
                 if email == creator.email:
                     continue  # Skip creator (already added)
 
-                # Find or create user
+                # Find existing user
                 user = User.query.filter_by(email=email).first()
-                if not user:
-                    # Create placeholder user (they'll set display_name later)
-                    user = User(email=email)
-                    db.session.add(user)
 
-                if user not in group.members:
-                    group.members.append(user)
+                if user:
+                    # User exists - add them to the group
+                    if user not in group.members:
+                        group.members.append(user)
+                else:
+                    # User doesn't exist - create invitation
+                    # Check if invitation already exists
+                    existing_invitation = GroupInvitation.query.filter_by(
+                        email=email, group_id=group.id, status="pending"
+                    ).first()
+
+                    if not existing_invitation:
+                        invitation = GroupInvitation(
+                            email=email, group_id=group.id, invited_by_id=user_id
+                        )
+                        db.session.add(invitation)
+
+                        # Send invitation notification
+                        try:
+                            notify_group_invitation(creator.email, email, name)
+                        except Exception as e:
+                            print(f"Failed to send invitation notification: {e}")
 
         db.session.commit()
         flash(f"Group '{name}' created successfully!", "success")

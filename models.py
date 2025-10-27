@@ -98,3 +98,23 @@ class Group(db.Model):
 
     def __repr__(self):
         return f"<Group {self.name}>"
+
+
+class GroupInvitation(db.Model):
+    """Model for tracking pending group invitations."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(200), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey("group.id"), nullable=False)
+    invited_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    status = db.Column(
+        db.String(20), nullable=False, default="pending"
+    )  # 'pending', 'accepted', 'declined'
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    # Relationships
+    group = db.relationship("Group", backref="invitations")
+    invited_by = db.relationship("User", foreign_keys=[invited_by_id])
+
+    def __repr__(self):
+        return f"<GroupInvitation {self.email} -> {self.group.name}>"
