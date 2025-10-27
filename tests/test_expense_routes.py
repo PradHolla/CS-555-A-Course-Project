@@ -109,9 +109,10 @@ def test_groups_list_returns_ok(client, app):
 
 
 def test_groups_create_group_with_members(client, app):
-    """Test that POST /groups/create creates a new group with members."""
+    """Test that POST /groups/create creates invitations for non-existent members."""
     # Arrange
     from extensions import db
+    from models import GroupInvitation
 
     # Create the logged-in user (creator)
     creator = User(email="test@example.com")
@@ -134,10 +135,10 @@ def test_groups_create_group_with_members(client, app):
     assert response.status_code == 302
     stored = Group.query.filter_by(name="My Agile group").first()
     assert stored is not None
-    assert len(stored.members) == 4  # Creator + 3 members
+    assert len(stored.members) == 1  # Only creator (others are invited)
     assert creator in stored.members
-    # Check that member users were created
-    assert User.query.filter_by(email="anikait@example.com").first() is not None
+    # Check that invitations were created for non-existent users
+    assert GroupInvitation.query.filter_by(email="anikait@example.com").first() is not None
 
 
 def test_groups_create_group_rejects_invalid_member_emails(client, app):
@@ -226,9 +227,10 @@ def test_groups_create_group_requires_name(client, app):
 
 
 def test_groups_create_group_skips_duplicate_creator(client, app):
-    """Test that creator is not added twice if listed in members."""
+    """Test that creator is not added twice if listed in members, and creates invitation for new user."""
     # Arrange
     from extensions import db
+    from models import GroupInvitation
 
     creator = User(email="test@example.com")
     db.session.add(creator)
@@ -250,10 +252,12 @@ def test_groups_create_group_skips_duplicate_creator(client, app):
     assert response.status_code == 302
     group = Group.query.filter_by(name="Test Group").first()
     assert group is not None
-    # Creator should only be in members once, plus alice
+    # Creator should only be in members once
     creator_count = sum(1 for m in group.members if m.email == "test@example.com")
     assert creator_count == 1
-    assert len(group.members) == 2  # creator + alice
+    assert len(group.members) == 1  # Only creator (alice gets an invitation)
+    # Check invitation was created for alice
+    assert GroupInvitation.query.filter_by(email="alice@example.com").first() is not None
 
 
 def test_groups_list_requires_login(client):
@@ -1183,4 +1187,3 @@ def test_expense_splitter_displays_user_display_names(client, app):
     assert b"Bob Jones" in response.data
     # Emails should not be visible as standalone text (they're in email_to_name mapping)
     # Note: emails still exist in HTML attributes and data structures, so we check for display names
-

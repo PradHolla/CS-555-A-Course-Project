@@ -42,3 +42,21 @@ def notify_expense_participants(expense, participant_emails):
         print(f"Subject: {subject}")
         print(f"\n{body}")
         print("=" * 60 + "\n")
+
+
+def notify_group_invitation(inviter_email, invitee_email, group_name):
+    """Print notification to terminal when a user is invited to a group."""
+    subject = f"You've been invited to join '{group_name}'"
+    body = (
+        f"{inviter_email} has invited you to join the group '{group_name}'.\n\n"
+        f"When you sign up or log in, you'll automatically be added to this group.\n"
+    )
+
+    # Print notification to terminal instead of sending email
+    print("\n" + "=" * 60)
+    print("GROUP INVITATION")
+    print("=" * 60)
+    print(f"To: {invitee_email}")
+    print(f"Subject: {subject}")
+    print(f"\n{body}")
+    print("=" * 60 + "\n")
