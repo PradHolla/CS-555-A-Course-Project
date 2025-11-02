@@ -60,3 +60,26 @@ def notify_group_invitation(inviter_email, invitee_email, group_name):
     print(f"Subject: {subject}")
     print(f"\n{body}")
     print("=" * 60 + "\n")
+
+
+def notify_expense_deletion(expense, deleter_email, group_members):
+    """Print notification to terminal for group members when an expense is deleted."""
+    subject = f"Expense deleted: {expense.description}"
+    body = (
+        f"An expense has been deleted from your group:\n\n"
+        f"Description: {expense.description}\n"
+        f"Amount: ${expense.amount:.2f}\n"
+        f"Paid by: {expense.payer}\n"
+        f"Deleted by: {deleter_email}\n"
+    )
+
+    # Print notification to terminal for all group members except the deleter
+    for member in group_members:
+        if member.email != deleter_email:
+            print("\n" + "=" * 60)
+            print("EXPENSE DELETION NOTIFICATION")
+            print("=" * 60)
+            print(f"To: {member.email}")
+            print(f"Subject: {subject}")
+            print(f"\n{body}")
+            print("=" * 60 + "\n")

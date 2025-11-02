@@ -5,7 +5,11 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from extensions import db
 from models import Expense, Group, GroupInvitation, User
 from services.expense_service import ExpenseService
-from services.notification_service import notify_expense_participants, notify_group_invitation
+from services.notification_service import (
+    notify_expense_deletion,
+    notify_expense_participants,
+    notify_group_invitation,
+)
 from utils.decorators import login_required
 from utils.validators import is_valid_email
 
@@ -294,10 +298,141 @@ def group_expenses(group_id):
         }
     ]
 
+    # Check for expense deletion notification
+    deletion_info = None
+    from models import GroupNotification
+
+    # Get unread notifications for this group
+    notifications = GroupNotification.query.filter_by(
+        group_id=group_id, notification_type="expense_deleted"
+    ).order_by(GroupNotification.created_at.desc()).all()
+
+    # Find notifications the current user hasn't seen
+    for notification in notifications:
+        read_by_ids = json.loads(notification.read_by) if notification.read_by else []
+        if user.id not in read_by_ids:
+            deletion_info = {
+                "description": notification.description,
+                "amount": str(notification.amount) if notification.amount else "",
+                "payer": notification.payer or "",
+                "deleted_by": notification.deleted_by or "",
+                "notification_id": notification.id,
+            }
+            break  # Show the most recent unread notification
+
     return render_template(
         "groups/expenses.html",
         group=group,
         expenses=expense_views,
         groups_data=groups_data,
         email_to_name=email_to_name,
+        deletion_info=deletion_info,
     )
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/delete", methods=["POST"])
+@login_required
+def delete_expense(group_id, expense_id):
+    """Delete an expense from a group."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Store expense details for notification before deletion
+    expense_description = expense.description
+    expense_amount = expense.amount
+    expense_payer = expense.payer
+    expense_participants = expense.participants
+    deleter_name = user.display_name or user.email
+
+    # Create a simple object for notification (expense will be deleted)
+    class ExpenseInfo:
+        def __init__(self, description, amount, payer, participants):
+            self.description = description
+            self.amount = amount
+            self.payer = payer
+            self.participants = participants
+
+    expense_info = ExpenseInfo(expense_description, expense_amount, expense_payer, expense_participants)
+
+    # Delete the expense
+    db.session.delete(expense)
+    db.session.commit()
+
+    # Send notifications to other group members (excluding the deleter)
+    try:
+        notify_expense_deletion(expense_info, user.email, group.members)
+    except Exception as e:
+        print(f"Failed to send deletion notifications: {e}")
+
+    # Create database notification for all group members to see
+    from models import GroupNotification
+
+    notification = GroupNotification(
+        group_id=group_id,
+        notification_type="expense_deleted",
+        description=expense_description,
+        amount=expense_amount,
+        payer=expense_payer,
+        deleted_by=deleter_name,
+        read_by="[]",  # Empty JSON array - no one has read it yet
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    flash("Expense deleted successfully!", "success")
+    return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/notification/<int:notification_id>/read", methods=["POST"])
+@login_required
+def mark_notification_read(group_id, notification_id):
+    """Mark a notification as read by the current user."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        return redirect(url_for("groups.list_groups"))
+
+    from models import GroupNotification
+
+    notification = db.session.get(GroupNotification, notification_id)
+    if not notification or notification.group_id != group_id:
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify user is a member of the group
+    group = db.session.get(Group, group_id)
+    if not group or user not in group.members:
+        return redirect(url_for("groups.list_groups"))
+
+    # Mark as read by this user
+    read_by_ids = json.loads(notification.read_by) if notification.read_by else []
+    if user.id not in read_by_ids:
+        read_by_ids.append(user.id)
+        notification.read_by = json.dumps(read_by_ids)
+        db.session.commit()
+
+    return redirect(url_for("groups.group_expenses", group_id=group_id))

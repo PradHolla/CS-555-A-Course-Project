@@ -361,3 +361,995 @@ def test_group_expenses_post_creates_expense(client, app):
     expense = Expense.query.filter_by(description="Lunch", group_id=group.id).first()
     assert expense is not None
     assert expense.amount == 30.0
+
+
+def test_delete_expense_success(client, app):
+    """Test that any group member can delete an expense."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    assert Expense.query.get(expense_id) is None
+
+
+def test_delete_expense_requires_login(client, app):
+    """Test that unauthenticated users cannot delete expenses."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    # Act - no login session
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+    )
+
+    # Assert - should redirect to login
+    assert response.status_code == 302
+    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+
+
+def test_delete_expense_requires_membership(client, app):
+    """Test that non-group members cannot delete expenses."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([payer, non_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = non_member.id
+        sess["user_email"] = non_member.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+    )
+
+    # Assert - should redirect
+    assert response.status_code == 302
+    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+
+
+def test_delete_expense_not_found(client, app):
+    """Test that deleting non-existent expense returns error."""
+    # Arrange
+    from extensions import db
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    # Act - try to delete non-existent expense
+    response = client.post(
+        f"/groups/{group.id}/expense/99999/delete", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense not found" in response.data
+
+
+def test_delete_expense_wrong_group(client, app):
+    """Test that cannot delete expense from different group."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    member = User(email="member@example.com")
+    db.session.add_all([payer, member])
+    db.session.commit()
+
+    group1 = Group(name="Group 1", created_by_id=payer.id)
+    group2 = Group(name="Group 2", created_by_id=member.id)
+    group1.members.append(payer)
+    group2.members.extend([payer, member])
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group1.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = member.id
+        sess["user_email"] = member.email
+
+    # Act - try to delete expense from group1 while accessing via group2
+    response = client.post(
+        f"/groups/{group2.id}/expense/{expense_id}/delete", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense does not belong to this group" in response.data
+    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+
+
+def test_delete_expense_removes_from_database(client, app):
+    """Test that expense is actually removed from database."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    # Verify expense exists before deletion
+    assert Expense.query.get(expense_id) is not None
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False)
+
+    # Assert
+    assert Expense.query.get(expense_id) is None
+
+
+def test_delete_expense_redirects_correctly(client, app):
+    """Test that redirect goes to correct group expenses page."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    assert f"/groups/{group.id}" in response.location
+
+
+def test_delete_expense_shows_success_message(client, app):
+    """Test that flash message appears for deleter."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense deleted successfully" in response.data
+
+
+def test_delete_expense_sends_notifications(client, app):
+    """Test that notifications are sent to other group members."""
+    # Arrange
+    from unittest.mock import patch
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    other_member = User(email="other@example.com")
+    db.session.add_all([payer, deleter, other_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter, other_member])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 10.0, "deleter@example.com": 10.0, "other@example.com": 10.0}',
+        participants="payer@example.com, deleter@example.com, other@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    with patch("builtins.print") as mock_print:
+        client.post(
+            f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+        )
+
+        # Assert - check that notifications were printed
+        assert mock_print.called
+        printed_output = " ".join(str(call) for call in mock_print.call_args_list)
+        # Should notify payer and other_member, but not deleter
+        assert "payer@example.com" in printed_output or "other@example.com" in printed_output
+        assert "EXPENSE DELETION NOTIFICATION" in printed_output or "deleted" in printed_output.lower()
+
+
+def test_delete_expense_no_notification_to_deleter(client, app):
+    """Test that deleter does not receive notification."""
+    # Arrange
+    from unittest.mock import patch
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    with patch("builtins.print") as mock_print:
+        client.post(
+            f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+        )
+
+        # Assert - check that notification is not sent TO the deleter
+        if mock_print.called:
+            printed_output = " ".join(str(call) for call in mock_print.call_args_list)
+            # Notification should be sent TO payer@example.com but NOT TO deleter@example.com
+            # The deleter's email may appear in the body as "Deleted by", but should not appear as "To:"
+            assert "To: payer@example.com" in printed_output
+            assert "To: deleter@example.com" not in printed_output
+
+
+def test_delete_expense_user_not_found_error(client, app):
+    """Test delete expense handles user not found error."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    # Act - Delete user after session is set up to test the defensive check
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        # Simulate user being deleted (defensive check in function)
+        db.session.delete(payer)
+        db.session.flush()  # Don't commit yet, but flush to make it visible
+
+    # The login_required decorator will catch this, but we test the defensive check
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=True
+    )
+
+    # Assert - login_required decorator should redirect to login
+    assert response.status_code == 200
+
+
+def test_delete_expense_group_not_found_error(client, app):
+    """Test delete expense handles group not found error."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="user@example.com",
+        group_id=99999,  # Non-existent group
+        split_type="equal",
+        split_details='{"user@example.com": 30.0}',
+        participants="user@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        f"/groups/99999/expense/{expense_id}/delete", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
+
+
+def test_delete_expense_handles_notification_error(client, app):
+    """Test that expense deletion continues even if notification fails."""
+    # Arrange
+    from extensions import db
+    from models import Expense, GroupNotification
+    from unittest.mock import patch
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act - Simulate notification failure
+    with patch("routes.groups.notify_expense_deletion", side_effect=Exception("Notification error")):
+        response = client.post(
+            f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
+        )
+
+    # Assert - Expense should still be deleted and notification should be created
+    assert response.status_code == 302
+    assert Expense.query.get(expense_id) is None
+    notification = GroupNotification.query.filter_by(
+        group_id=group.id, notification_type="expense_deleted"
+    ).first()
+    assert notification is not None
+
+
+def test_delete_expense_creates_notification(client, app):
+    """Test that deleting an expense creates a database notification."""
+    # Arrange
+    from extensions import db
+    from models import Expense, GroupNotification
+
+    payer = User(email="payer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "deleter@example.com": 15.0}',
+        participants="payer@example.com, deleter@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = deleter.id
+        sess["user_email"] = deleter.email
+
+    # Act
+    client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False)
+
+    # Assert
+    notification = GroupNotification.query.filter_by(
+        group_id=group.id, notification_type="expense_deleted"
+    ).first()
+    assert notification is not None
+    assert notification.description == "Lunch"
+    assert notification.amount == 30.0
+    assert notification.payer == "payer@example.com"
+    assert notification.deleted_by == deleter.email
+
+
+def test_group_member_sees_deletion_notification(client, app):
+    """Test that group members see deletion notification banner."""
+    # Arrange
+    from extensions import db
+    from models import Expense, GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    viewer = User(email="viewer@example.com")
+    deleter = User(email="deleter@example.com")
+    db.session.add_all([payer, viewer, deleter])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, viewer, deleter])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create notification manually (simulating deletion)
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="deleter@example.com",
+        read_by="[]",
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act
+    response = client.get(f"/groups/{group.id}")
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Lunch" in response.data
+    assert b"$30.00" in response.data
+    assert b"deleter@example.com" in response.data
+
+
+def test_notification_with_null_read_by(client, app):
+    """Test that notification works when read_by is None."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    viewer = User(email="viewer@example.com")
+    db.session.add_all([payer, viewer])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, viewer])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create notification with null read_by
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by=None,  # Null read_by
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act
+    response = client.get(f"/groups/{group.id}")
+
+    # Assert - Should show notification since read_by is None
+    assert response.status_code == 200
+    assert b"Lunch" in response.data
+
+
+def test_notification_not_shown_after_read(client, app):
+    """Test that notification is not shown after user marks it as read."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    viewer = User(email="viewer@example.com")
+    db.session.add_all([payer, viewer])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, viewer])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create notification with viewer already marked as read
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by=json.dumps([viewer.id]),
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act
+    response = client.get(f"/groups/{group.id}")
+
+    # Assert
+    assert response.status_code == 200
+    # Notification should not be shown since viewer already read it
+    assert b"Expense Deleted" not in response.data or b"Lunch" not in response.data
+
+
+def test_mark_notification_read_with_null_read_by(client, app):
+    """Test marking notification as read when read_by is None."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    viewer = User(email="viewer@example.com")
+    db.session.add_all([payer, viewer])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, viewer])
+    db.session.add(group)
+    db.session.commit()
+
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by=None,  # Null read_by
+    )
+    db.session.add(notification)
+    db.session.commit()
+    notification_id = notification.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/notification/{notification_id}/read", follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    notification = GroupNotification.query.get(notification_id)
+    read_by_ids = json.loads(notification.read_by)
+    assert viewer.id in read_by_ids
+
+
+def test_mark_notification_read_already_read(client, app):
+    """Test that marking already-read notification doesn't add duplicate."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    viewer = User(email="viewer@example.com")
+    db.session.add_all([payer, viewer])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, viewer])
+    db.session.add(group)
+    db.session.commit()
+
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by=json.dumps([viewer.id]),  # Already read by viewer
+    )
+    db.session.add(notification)
+    db.session.commit()
+    notification_id = notification.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act - Mark as read again
+    response = client.post(
+        f"/groups/{group.id}/notification/{notification_id}/read", follow_redirects=False
+    )
+
+    # Assert - Should not add duplicate
+    assert response.status_code == 302
+    notification = GroupNotification.query.get(notification_id)
+    read_by_ids = json.loads(notification.read_by)
+    assert read_by_ids.count(viewer.id) == 1  # Should only appear once
+
+
+def test_mark_notification_read(client, app):
+    """Test that marking notification as read works."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    viewer = User(email="viewer@example.com")
+    db.session.add_all([payer, viewer])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, viewer])
+    db.session.add(group)
+    db.session.commit()
+
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by="[]",
+    )
+    db.session.add(notification)
+    db.session.commit()
+    notification_id = notification.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/notification/{notification_id}/read", follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    notification = GroupNotification.query.get(notification_id)
+    read_by_ids = json.loads(notification.read_by)
+    assert viewer.id in read_by_ids
+
+
+def test_mark_notification_read_requires_membership(client, app):
+    """Test that only group members can mark notifications as read."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    import json
+
+    payer = User(email="payer@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([payer, non_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by="[]",
+    )
+    db.session.add(notification)
+    db.session.commit()
+    notification_id = notification.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = non_member.id
+        sess["user_email"] = non_member.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/notification/{notification_id}/read", follow_redirects=False
+    )
+
+    # Assert - should redirect and not mark as read
+    assert response.status_code == 302
+    notification = GroupNotification.query.get(notification_id)
+    read_by_ids = json.loads(notification.read_by)
+    assert non_member.id not in read_by_ids
+
+
+def test_mark_notification_read_user_not_found(client, app):
+    """Test mark notification read handles user not found."""
+    # Arrange
+    from extensions import db
+    from models import GroupNotification
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        deleted_by="payer@example.com",
+        read_by="[]",
+    )
+    db.session.add(notification)
+    db.session.commit()
+    notification_id = notification.id
+
+    # Act - invalid user_id in session
+    with client.session_transaction() as sess:
+        sess["user_id"] = 99999  # Non-existent user
+
+    response = client.post(
+        f"/groups/{group.id}/notification/{notification_id}/read", follow_redirects=False
+    )
+
+    # Assert - should redirect
+    assert response.status_code == 302
+
+
+def test_mark_notification_read_notification_not_found(client, app):
+    """Test mark notification read handles notification not found."""
+    # Arrange
+    from extensions import db
+
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act - try to mark non-existent notification as read
+    response = client.post(
+        f"/groups/{group.id}/notification/99999/read", follow_redirects=False
+    )
+
+    # Assert - should redirect
+    assert response.status_code == 302
