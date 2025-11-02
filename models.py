@@ -118,3 +118,23 @@ class GroupInvitation(db.Model):
 
     def __repr__(self):
         return f"<GroupInvitation {self.email} -> {self.group.name}>"
+
+
+class GroupNotification(db.Model):
+    """Model for tracking group notifications like expense deletions."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey("group.id"), nullable=False)
+    notification_type = db.Column(db.String(50), nullable=False)  # 'expense_deleted'
+    description = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Float, nullable=True)
+    payer = db.Column(db.String(200), nullable=True)
+    deleted_by = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    read_by = db.Column(db.Text)  # JSON array of user IDs who have seen this
+
+    # Relationships
+    group = db.relationship("Group", backref="notifications")
+
+    def __repr__(self):
+        return f"<GroupNotification {self.notification_type} for group {self.group_id}>"
