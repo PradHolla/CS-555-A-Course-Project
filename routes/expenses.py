@@ -16,7 +16,15 @@ expenses_bp = Blueprint("expenses", __name__)
 @expenses_bp.route("/expense-splitter", methods=["GET", "POST"])
 @login_required
 def expense_splitter():
-    """Handle expense splitter page - create and view expenses."""
+    """Redirect to groups list - expenses are now group-specific."""
+    # Redirect to groups list since expenses are now group-scoped
+    return redirect(url_for("groups.list_groups"))
+
+
+@expenses_bp.route("/expense-splitter-old", methods=["GET", "POST"])
+@login_required
+def expense_splitter_old():
+    """Old expense splitter - kept for reference but redirects."""
     # Get all groups for the form
     groups = Group.query.all()
 

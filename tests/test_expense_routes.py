@@ -3,8 +3,8 @@
 from models import Expense, Group, User
 
 
-def test_expense_splitter_get_returns_ok(client, app):
-    """Test that GET /expense-splitter returns a 200 status code."""
+def test_expense_splitter_get_redirects_to_groups(client, app):
+    """Test that GET /expense-splitter redirects to groups list."""
     # Arrange
     from extensions import db
 
@@ -20,10 +20,41 @@ def test_expense_splitter_get_returns_ok(client, app):
         session["user_email"] = "test@example.com"
 
     # Act
-    response = client.get("/expense-splitter")
+    response = client.get("/expense-splitter", follow_redirects=False)
 
-    # Assert
-    assert response.status_code == 200
+    # Assert - should redirect to groups list
+    assert response.status_code == 302
+    assert "/groups/" in response.location
+
+
+def test_expense_splitter_post_redirects_to_groups(client, app):
+    """Test that POST /expense-splitter redirects to groups list."""
+    # Arrange
+    from extensions import db
+
+    # Create users and group
+    alex = User(email="alex@example.com")
+    sam = User(email="sam@example.com")
+    jo = User(email="jo@example.com")
+    db.session.add_all([alex, sam, jo])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alex.id)
+    group.members.extend([alex, sam, jo])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create a logged-in user session
+    with client.session_transaction() as session:
+        session["user_id"] = 1
+        session["user_email"] = "test@example.com"
+
+    # Act - try to POST to expense-splitter (should redirect)
+    response = client.post("/expense-splitter", follow_redirects=False)
+
+    # Assert - should redirect to groups list
+    assert response.status_code == 302
+    assert "/groups/" in response.location
 
 
 def test_expense_splitter_post_creates_expense(client, app):
@@ -48,21 +79,27 @@ def test_expense_splitter_post_creates_expense(client, app):
         session["user_id"] = 1
         session["user_email"] = "test@example.com"
 
-    expense_data = {
-        "description": "Dinner",
-        "amount": "36.75",
-        "payer": "alex@example.com",
-        "group_id": str(group.id),
-        "split_type": "equal",
-        "participants": ["alex@example.com", "sam@example.com", "jo@example.com"],
-    }
+    # Use MultiDict to handle multiple participants
+    from werkzeug.datastructures import MultiDict
 
-    # Act
-    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "36.75"),
+            ("payer", "alex@example.com"),
+            ("split_type", "equal"),
+            ("participants", "alex@example.com"),
+            ("participants", "sam@example.com"),
+            ("participants", "jo@example.com"),
+        ]
+    )
+
+    # Act - use new group-specific route
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
 
     # Assert
     assert response.status_code == 302
-    stored = Expense.query.filter_by(description="Dinner").first()
+    stored = Expense.query.filter_by(description="Dinner", group_id=group.id).first()
     assert stored is not None
     assert stored.amount == 36.75
     assert stored.payer == "alex@example.com"
@@ -164,9 +201,9 @@ def test_groups_create_group_rejects_invalid_member_emails(client, app):
     # Act
     response = client.post("/groups/create", data=group_data, follow_redirects=False)
 
-    # Assert - should redirect back to groups page
+    # Assert - should redirect back to create page
     assert response.status_code == 302
-    assert response.location == "/groups/"
+    assert response.location.endswith("/groups/create")
     # Group should not have been created
     assert Group.query.filter_by(name="Invalid Email Group").first() is None
 
@@ -462,24 +499,29 @@ def test_expense_splitter_creates_equal_split_expense(client, app):
     db.session.commit()
 
     with client.session_transaction() as session:
-        session["user_id"] = 1
-        session["user_email"] = "test@example.com"
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
 
-    expense_data = {
-        "description": "Dinner",
-        "amount": "60.00",
-        "payer": "alice@example.com",
-        "group_id": str(group.id),
-        "split_type": "equal",
-        "participants": ["alice@example.com", "bob@example.com", "charlie@example.com"],
-    }
+    from werkzeug.datastructures import MultiDict
 
-    # Act
-    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "60.00"),
+            ("payer", "alice@example.com"),
+            ("split_type", "equal"),
+            ("participants", "alice@example.com"),
+            ("participants", "bob@example.com"),
+            ("participants", "charlie@example.com"),
+        ]
+    )
+
+    # Act - use new group-specific route
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
 
     # Assert
     assert response.status_code == 302  # Redirect after success
-    stored = Expense.query.first()
+    stored = Expense.query.filter_by(description="Dinner", group_id=group.id).first()
     assert stored is not None
     assert stored.description == "Dinner"
     assert stored.amount == 60.0
@@ -518,26 +560,25 @@ def test_expense_splitter_creates_custom_split_expense(client, app):
     db.session.commit()
 
     with client.session_transaction() as session:
-        session["user_id"] = 1
-        session["user_email"] = "test@example.com"
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
 
     expense_data = {
         "description": "Dinner",
         "amount": "60.00",
         "payer": "alice@example.com",
-        "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_alice@example.com": "30.00",
         "custom_amount_bob@example.com": "20.00",
         "custom_amount_charlie@example.com": "10.00",
     }
 
-    # Act
-    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+    # Act - use new group-specific route
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
 
     # Assert
     assert response.status_code == 302  # Redirect after success
-    stored = Expense.query.first()
+    stored = Expense.query.filter_by(description="Dinner", group_id=group.id).first()
     assert stored is not None
     assert stored.split_type == "custom"
 
@@ -570,25 +611,24 @@ def test_expense_splitter_rejects_custom_split_mismatch(client, app):
     db.session.commit()
 
     with client.session_transaction() as session:
-        session["user_id"] = 1
-        session["user_email"] = "test@example.com"
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
 
     expense_data = {
         "description": "Dinner",
         "amount": "50.00",
         "payer": "alice@example.com",
-        "group_id": str(group.id),
         "split_type": "custom",
         "custom_amount_alice@example.com": "30.00",
         "custom_amount_bob@example.com": "20.00",  # Total = 50, should be valid
     }
 
-    # Act
-    response = client.post("/expense-splitter", data=expense_data, follow_redirects=False)
+    # Act - use new group-specific route
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
 
     # Assert
     assert response.status_code == 302  # Should succeed
-    assert Expense.query.count() == 1
+    assert Expense.query.filter_by(group_id=group.id).count() == 1
 
 
 def test_expense_splitter_rejects_custom_split_total_mismatch(client, app):
@@ -684,11 +724,11 @@ def test_expense_splitter_filters_by_group(client, app):
     db.session.commit()
 
     with client.session_transaction() as session:
-        session["user_id"] = 1
-        session["user_email"] = "test@example.com"
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
 
-    # Act
-    response = client.get(f"/expense-splitter?group_id={group1.id}")
+    # Act - use new group-specific route
+    response = client.get(f"/groups/{group1.id}")
 
     # Assert
     assert response.status_code == 200
@@ -1178,8 +1218,8 @@ def test_expense_splitter_displays_user_display_names(client, app):
         session["user_id"] = alice.id
         session["user_email"] = "alice@example.com"
 
-    # Get the expense splitter page
-    response = client.get("/expense-splitter")
+    # Get the group expenses page
+    response = client.get(f"/groups/{group.id}")
     assert response.status_code == 200
 
     # Check that display names are shown instead of emails

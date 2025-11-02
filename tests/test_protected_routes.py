@@ -14,7 +14,7 @@ def test_expense_splitter_redirects_if_not_logged_in(client):
 
 
 def test_expense_splitter_accessible_when_logged_in(client, app):
-    """Test that /expense-splitter is accessible when user is logged in."""
+    """Test that /expense-splitter redirects to groups when user is logged in."""
     # Arrange - create user and simulate logged in session
     from extensions import db
 
@@ -29,10 +29,11 @@ def test_expense_splitter_accessible_when_logged_in(client, app):
         sess["user_email"] = "test@example.com"
 
     # Act
-    response = client.get("/expense-splitter")
+    response = client.get("/expense-splitter", follow_redirects=False)
 
-    # Assert
-    assert response.status_code == 200
+    # Assert - should redirect to groups list
+    assert response.status_code == 302
+    assert "/groups/" in response.location
 
 
 def test_expense_splitter_clears_stale_session(client, app):
