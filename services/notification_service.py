@@ -83,3 +83,27 @@ def notify_expense_deletion(expense, deleter_email, group_members):
             print(f"Subject: {subject}")
             print(f"\n{body}")
             print("=" * 60 + "\n")
+
+
+def notify_expense_edited(expense, editor_email, group_members):
+    """Print notification to terminal for group members when an expense is edited."""
+    subject = f"Expense edited: {expense.description}"
+    body = (
+        f"An expense has been edited in your group:\n\n"
+        f"Description: {expense.description}\n"
+        f"Amount: ${expense.amount:.2f}\n"
+        f"Paid by: {expense.payer}\n"
+        f"Participants: {expense.participants or 'Not specified'}\n"
+        f"Edited by: {editor_email}\n"
+    )
+
+    # Print notification to terminal for all group members except the editor
+    for member in group_members:
+        if member.email != editor_email:
+            print("\n" + "=" * 60)
+            print("EXPENSE EDIT NOTIFICATION")
+            print("=" * 60)
+            print(f"To: {member.email}")
+            print(f"Subject: {subject}")
+            print(f"\n{body}")
+            print("=" * 60 + "\n")
