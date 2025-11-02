@@ -24,13 +24,10 @@ def test_expense_creation_sends_notification_to_participants(client, app):
     from models import Group
 
     with app.app_context():
-        payer = User(email="payer@example.com")
-        participant1 = User(email="participant1@example.com")
-        participant2 = User(email="participant2@example.com")
         john = User(email="john@example.com")
         alice = User(email="alice@example.com")
         bob_user = User(email="bob@example.com")
-        db.session.add_all([payer, participant1, participant2, john, alice, bob_user])
+        db.session.add_all([john, alice, bob_user])
         db.session.flush()
 
         # Create a group with members
@@ -39,25 +36,31 @@ def test_expense_creation_sends_notification_to_participants(client, app):
         db.session.add(group)
         db.session.commit()
 
-        payer_id = payer.id
+        payer_id = john.id  # Use john who is in the group
         group_id = group.id
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
-        sess["user_email"] = "payer@example.com"
+        sess["user_email"] = "john@example.com"
 
     # Act
-    with patch("services.notification_service.print") as mock_print:
+    from werkzeug.datastructures import MultiDict
+
+    with patch("builtins.print") as mock_print:
+        expense_data = MultiDict(
+            [
+                ("description", "Dinner at restaurant"),
+                ("amount", "150.00"),
+                ("payer", "john@example.com"),
+                ("split_type", "equal"),
+                ("participants", "john@example.com"),
+                ("participants", "alice@example.com"),
+                ("participants", "bob@example.com"),
+            ]
+        )
         response = client.post(
-            "/expense-splitter",
-            data={
-                "description": "Dinner at restaurant",
-                "amount": "150.00",
-                "payer": "john@example.com",
-                "group_id": str(group_id),
-                "split_type": "equal",
-                "participants": ["john@example.com", "alice@example.com", "bob@example.com"],
-            },
+            f"/groups/{group_id}",
+            data=expense_data,
             follow_redirects=False,
         )
 
@@ -123,11 +126,9 @@ def test_expense_notification_contains_all_details(client, app):
     from models import Group
 
     with app.app_context():
-        payer = User(email="payer@example.com")
-        participant = User(email="participant@example.com")
         bob_user = User(email="bob@example.com")
         charlie = User(email="charlie@example.com")
-        db.session.add_all([payer, participant, bob_user, charlie])
+        db.session.add_all([bob_user, charlie])
         db.session.flush()
 
         # Create a group with members
@@ -136,25 +137,27 @@ def test_expense_notification_contains_all_details(client, app):
         db.session.add(group)
         db.session.commit()
 
-        payer_id = payer.id
+        payer_id = bob_user.id  # Use bob who is in the group
         group_id = group.id
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
 
     # Act
-    with patch("services.notification_service.print") as mock_print:
-        client.post(
-            "/expense-splitter",
-            data={
-                "description": "Movie tickets",
-                "amount": "30.00",
-                "payer": "bob@example.com",
-                "group_id": str(group_id),
-                "split_type": "equal",
-                "participants": ["bob@example.com", "charlie@example.com"],
-            },
+    from werkzeug.datastructures import MultiDict
+
+    with patch("builtins.print") as mock_print:
+        expense_data = MultiDict(
+            [
+                ("description", "Movie tickets"),
+                ("amount", "30.00"),
+                ("payer", "bob@example.com"),
+                ("split_type", "equal"),
+                ("participants", "bob@example.com"),
+                ("participants", "charlie@example.com"),
+            ]
         )
+        client.post(f"/groups/{group_id}", data=expense_data)
 
         # Assert
         assert mock_print.called
@@ -172,11 +175,9 @@ def test_multiple_expenses_send_separate_notifications(client, app):
     from models import Group
 
     with app.app_context():
-        payer = User(email="payer@example.com")
-        participant = User(email="participant@example.com")
         charlie = User(email="charlie@example.com")
         dave = User(email="dave@example.com")
-        db.session.add_all([payer, participant, charlie, dave])
+        db.session.add_all([charlie, dave])
         db.session.flush()
 
         # Create a group with members
@@ -185,39 +186,41 @@ def test_multiple_expenses_send_separate_notifications(client, app):
         db.session.add(group)
         db.session.commit()
 
-        payer_id = payer.id
+        payer_id = charlie.id  # Use charlie who is in the group
         group_id = group.id
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
 
     # Act
-    with patch("services.notification_service.print") as mock_print:
+    from werkzeug.datastructures import MultiDict
+
+    with patch("builtins.print") as mock_print:
         # Create first expense
-        client.post(
-            "/expense-splitter",
-            data={
-                "description": "Lunch",
-                "amount": "25.00",
-                "payer": "charlie@example.com",
-                "group_id": str(group_id),
-                "split_type": "equal",
-                "participants": ["charlie@example.com", "dave@example.com"],
-            },
+        expense1_data = MultiDict(
+            [
+                ("description", "Lunch"),
+                ("amount", "25.00"),
+                ("payer", "charlie@example.com"),
+                ("split_type", "equal"),
+                ("participants", "charlie@example.com"),
+                ("participants", "dave@example.com"),
+            ]
         )
+        client.post(f"/groups/{group_id}", data=expense1_data)
 
         # Create second expense
-        client.post(
-            "/expense-splitter",
-            data={
-                "description": "Coffee",
-                "amount": "10.00",
-                "payer": "charlie@example.com",
-                "group_id": str(group_id),
-                "split_type": "equal",
-                "participants": ["charlie@example.com", "dave@example.com"],
-            },
+        expense2_data = MultiDict(
+            [
+                ("description", "Coffee"),
+                ("amount", "10.00"),
+                ("payer", "charlie@example.com"),
+                ("split_type", "equal"),
+                ("participants", "charlie@example.com"),
+                ("participants", "dave@example.com"),
+            ]
         )
+        client.post(f"/groups/{group_id}", data=expense2_data)
 
         # Assert
         assert mock_print.called
@@ -234,11 +237,9 @@ def test_expense_notification_is_sent(client, app):
     from models import Group
 
     with app.app_context():
-        payer = User(email="payer@example.com")
-        participant = User(email="participant@example.com")
         diana = User(email="diana@example.com")
         eve = User(email="eve@example.com")
-        db.session.add_all([payer, participant, diana, eve])
+        db.session.add_all([diana, eve])
         db.session.flush()
 
         # Create a group with members
@@ -247,25 +248,27 @@ def test_expense_notification_is_sent(client, app):
         db.session.add(group)
         db.session.commit()
 
-        payer_id = payer.id
+        payer_id = diana.id  # Use diana who is in the group
         group_id = group.id
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
 
     # Act
-    with patch("services.notification_service.print") as mock_print:
-        client.post(
-            "/expense-splitter",
-            data={
-                "description": "Test expense",
-                "amount": "100.00",
-                "payer": "diana@example.com",
-                "group_id": str(group_id),
-                "split_type": "equal",
-                "participants": ["diana@example.com", "eve@example.com"],
-            },
+    from werkzeug.datastructures import MultiDict
+
+    with patch("builtins.print") as mock_print:
+        expense_data = MultiDict(
+            [
+                ("description", "Test expense"),
+                ("amount", "100.00"),
+                ("payer", "diana@example.com"),
+                ("split_type", "equal"),
+                ("participants", "diana@example.com"),
+                ("participants", "eve@example.com"),
+            ]
         )
+        client.post(f"/groups/{group_id}", data=expense_data)
 
         # Assert
         assert mock_print.called
@@ -299,23 +302,21 @@ def test_payer_does_not_receive_notification(client, app):
         sess["user_email"] = "payer@example.com"
 
     # Act
-    with patch("routes.expenses.notify_expense_participants") as mock_notify:
-        response = client.post(
-            "/expense-splitter",
-            data={
-                "description": "Team lunch",
-                "amount": "90.00",
-                "payer": "payer@example.com",
-                "group_id": str(group_id),
-                "split_type": "equal",
-                "participants": [
-                    "payer@example.com",
-                    "participant1@example.com",
-                    "participant2@example.com",
-                ],
-            },
-            follow_redirects=False,
+    from werkzeug.datastructures import MultiDict
+
+    with patch("routes.groups.notify_expense_participants") as mock_notify:
+        expense_data = MultiDict(
+            [
+                ("description", "Team lunch"),
+                ("amount", "90.00"),
+                ("payer", "payer@example.com"),
+                ("split_type", "equal"),
+                ("participants", "payer@example.com"),
+                ("participants", "participant1@example.com"),
+                ("participants", "participant2@example.com"),
+            ]
         )
+        response = client.post(f"/groups/{group_id}", data=expense_data, follow_redirects=False)
 
         # Assert
         assert response.status_code == 302  # Redirect after success

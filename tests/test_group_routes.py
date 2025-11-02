@@ -81,7 +81,7 @@ def test_groups_create_group_rejects_invalid_member_emails(client, app):
     # Act
     response = client.post("/groups/create", data=group_data, follow_redirects=True)
 
-    # Assert - should redirect back to groups page with error message
+    # Assert - should redirect back to create page with error message
     assert response.status_code == 200
     assert b"Invalid email format: notanemail" in response.data
     # Group should not have been created
@@ -138,8 +138,9 @@ def test_groups_create_group_requires_name(client, app):
     # Act
     response = client.post("/groups/create", data=group_data, follow_redirects=False)
 
-    # Assert - should redirect back with error
+    # Assert - should redirect back to create page with error
     assert response.status_code == 302
+    assert response.location.endswith("/groups/create")
     assert Group.query.count() == 0  # No group created
 
 
@@ -210,6 +211,153 @@ def test_groups_create_handles_database_error(client, app, monkeypatch):
     # Act
     response = client.post("/groups/create", data=group_data, follow_redirects=True)
 
-    # Assert - should redirect with error message
+    # Assert - should redirect to create page with error message
     assert response.status_code == 200
     assert b"Failed to create group" in response.data
+
+
+def test_groups_create_get_returns_ok(client, app):
+    """Test that GET /groups/create returns 200 for logged-in user."""
+    # Arrange
+    from extensions import db
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.get("/groups/create")
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Create Group" in response.data or b"CREATE GROUP" in response.data
+
+
+def test_groups_create_get_requires_login(client):
+    """Test that GET /groups/create requires login."""
+    # Act - no login session
+    response = client.get("/groups/create", follow_redirects=False)
+
+    # Assert - should redirect to login
+    assert response.status_code == 302
+
+
+def test_group_expenses_get_returns_ok(client, app):
+    """Test that GET /groups/<group_id> returns 200 for logged-in group member."""
+    # Arrange
+    from extensions import db
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.get(f"/groups/{group.id}")
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Test Group" in response.data
+
+
+def test_group_expenses_get_requires_login(client, app):
+    """Test that GET /groups/<group_id> requires login."""
+    # Arrange
+    from extensions import db
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    # Act - no login session
+    response = client.get(f"/groups/{group.id}", follow_redirects=False)
+
+    # Assert - should redirect to login
+    assert response.status_code == 302
+
+
+def test_group_expenses_requires_membership(client, app):
+    """Test that GET /groups/<group_id> requires user to be a group member."""
+    # Arrange
+    from extensions import db
+
+    member = User(email="member@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([member, non_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=member.id)
+    group.members.append(member)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = non_member.id
+        sess["user_email"] = non_member.email
+
+    # Act
+    response = client.get(f"/groups/{group.id}", follow_redirects=False)
+
+    # Assert - should redirect or return 403
+    assert response.status_code in [302, 403]
+
+
+def test_group_expenses_post_creates_expense(client, app):
+    """Test that POST /groups/<group_id> creates expense for that group."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    participant = User(email="participant@example.com")
+    db.session.add_all([payer, participant])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, participant])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    # Create MultiDict to handle multiple participants
+    expense_data = MultiDict(
+        [
+            ("description", "Lunch"),
+            ("amount", "30.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "participant@example.com"),
+        ]
+    )
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect after creation
+    expense = Expense.query.filter_by(description="Lunch", group_id=group.id).first()
+    assert expense is not None
+    assert expense.amount == 30.0
