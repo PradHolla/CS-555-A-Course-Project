@@ -7,6 +7,7 @@ from models import Expense, Group, GroupInvitation, User
 from services.expense_service import ExpenseService
 from services.notification_service import (
     notify_expense_deletion,
+    notify_expense_edited,
     notify_expense_participants,
     notify_group_invitation,
 )
@@ -350,17 +351,18 @@ def group_expenses(group_id):
         }
     ]
 
-    # Check for expense deletion notification
+    # Check for expense deletion and edit notifications
     deletion_info = None
+    edit_info = None
     from models import GroupNotification
 
-    # Get unread notifications for this group
-    notifications = GroupNotification.query.filter_by(
+    # Get unread deletion notifications for this group
+    deletion_notifications = GroupNotification.query.filter_by(
         group_id=group_id, notification_type="expense_deleted"
     ).order_by(GroupNotification.created_at.desc()).all()
 
-    # Find notifications the current user hasn't seen
-    for notification in notifications:
+    # Find deletion notifications the current user hasn't seen
+    for notification in deletion_notifications:
         read_by_ids = json.loads(notification.read_by) if notification.read_by else []
         if user.id not in read_by_ids:
             deletion_info = {
@@ -372,6 +374,27 @@ def group_expenses(group_id):
             }
             break  # Show the most recent unread notification
 
+    # Get unread edit notifications for this group
+    edit_notifications = GroupNotification.query.filter_by(
+        group_id=group_id, notification_type="expense_edited"
+    ).order_by(GroupNotification.created_at.desc()).all()
+
+    # Find edit notifications the current user hasn't seen
+    for notification in edit_notifications:
+        read_by_ids = json.loads(notification.read_by) if notification.read_by else []
+        if user.id not in read_by_ids:
+            edit_info = {
+                "description": notification.description,
+                "amount": str(notification.amount) if notification.amount else "",
+                "payer": notification.payer or "",
+                "edited_by": notification.edited_by or "",
+                "notification_id": notification.id,
+            }
+            break  # Show the most recent unread notification
+
+    # Count total transactions
+    transaction_count = len(expenses)
+
     return render_template(
         "groups/expenses.html",
         group=group,
@@ -379,6 +402,8 @@ def group_expenses(group_id):
         groups_data=groups_data,
         email_to_name=email_to_name,
         deletion_info=deletion_info,
+        edit_info=edit_info,
+        transaction_count=transaction_count,
     )
 
 
@@ -456,6 +481,160 @@ def delete_expense(group_id, expense_id):
     db.session.commit()
 
     flash("Expense deleted successfully!", "success")
+    return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/edit", methods=["POST"])
+@login_required
+def edit_expense(group_id, expense_id):
+    """Edit an expense in a group."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Extract form data
+    description = request.form.get("description", "").strip()
+    amount_raw = request.form.get("amount", "").strip()
+    payer = request.form.get("payer", "").strip()
+    split_type = request.form.get("split_type", "equal").strip()
+
+    # Validate required fields
+    if not description:
+        flash("Description is required", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if not payer:
+        flash("Payer is required", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Validate amount (must be > 0)
+    try:
+        amount = float(amount_raw)
+        if amount <= 0:
+            flash("Amount must be greater than zero", "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+    except (ValueError, TypeError):
+        flash("Please enter a valid amount", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Get group member emails for validation
+    group_member_emails = [member.email for member in group.members]
+
+    # Validate payer is in group
+    if payer not in group_member_emails:
+        flash("Payer must be a member of the group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Handle participants and split details
+    if split_type == "equal":
+        # Get selected participants for equal split
+        selected_participants = request.form.getlist("participants")
+        if not selected_participants:
+            flash("Please select at least one participant", "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Validate all participants are in group
+        for participant in selected_participants:
+            if participant not in group_member_emails:
+                flash(f"Participant '{participant}' is not in the group", "error")
+                return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Calculate equal split
+        split_details = ExpenseService.calculate_equal_split(selected_participants, amount)
+
+    else:  # custom split
+        # Get custom split amounts
+        split_details = {}
+        for member_email in group_member_emails:
+            amount_key = f"custom_amount_{member_email}"
+            custom_amount = request.form.get(amount_key, "").strip()
+            if custom_amount:
+                try:
+                    split_details[member_email] = float(custom_amount)
+                except ValueError:
+                    flash(f"Invalid amount for {member_email}", "error")
+                    return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        if not split_details:
+            flash("Please specify amounts for at least one participant", "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Validate custom split
+        is_valid, error_msg = ExpenseService.validate_custom_split(split_details, amount)
+        if not is_valid:
+            flash(error_msg, "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Store old expense values for notification (before update)
+    old_description = expense.description
+    old_amount = expense.amount
+    old_payer = expense.payer
+    editor_name = user.display_name or user.email
+
+    # Create a simple object for notification
+    class ExpenseInfo:
+        def __init__(self, description, amount, payer, participants):
+            self.description = description
+            self.amount = amount
+            self.payer = payer
+            self.participants = participants
+
+    expense_info = ExpenseInfo(description, amount, payer, ", ".join(split_details.keys()))
+
+    # Update expense
+    expense.description = description
+    expense.amount = amount
+    expense.payer = payer
+    expense.split_type = split_type
+    expense.split_details = json.dumps(split_details)
+    expense.participants = ", ".join(split_details.keys())  # Keep for backward compatibility
+    db.session.commit()
+
+    # Send notifications to other group members (excluding the editor)
+    try:
+        notify_expense_edited(expense_info, user.email, group.members)
+    except Exception as e:
+        print(f"Failed to send edit notifications: {e}")
+
+    # Create database notification for all group members to see
+    from models import GroupNotification
+
+    notification = GroupNotification(
+        group_id=group_id,
+        notification_type="expense_edited",
+        description=description,
+        amount=amount,
+        payer=payer,
+        edited_by=editor_name,
+        read_by="[]",  # Empty JSON array - no one has read it yet
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    flash("Expense updated successfully!", "success")
     return redirect(url_for("groups.group_expenses", group_id=group_id))
 
 
