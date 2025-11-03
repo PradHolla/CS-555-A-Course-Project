@@ -1353,3 +1353,1354 @@ def test_mark_notification_read_notification_not_found(client, app):
 
     # Assert - should redirect
     assert response.status_code == 302
+
+
+# Edit Expense Tests
+
+
+def test_edit_expense_success(client, app):
+    """Test that any group member can edit an expense."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - edit expense
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    updated_expense = Expense.query.get(expense_id)
+    assert updated_expense is not None
+    assert updated_expense.description == "Dinner"
+    assert updated_expense.amount == 50.0
+    assert updated_expense.payer == "editor@example.com"
+
+
+def test_edit_expense_requires_login(client, app):
+    """Test that unauthenticated users cannot edit expenses."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    # Act - no login session
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "equal",
+            "participants": ["payer@example.com"],
+        },
+        follow_redirects=False,
+    )
+
+    # Assert - should redirect to login
+    assert response.status_code == 302
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_requires_membership(client, app):
+    """Test that non-group members cannot edit expenses."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([payer, non_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = non_member.id
+        sess["user_email"] = non_member.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "equal",
+            "participants": ["payer@example.com"],
+        },
+        follow_redirects=True,
+    )
+
+    # Assert - should redirect with error
+    assert response.status_code == 200
+    assert b"You are not a member of this group" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_not_found(client, app):
+    """Test that editing non-existent expense returns error."""
+    # Arrange
+    from extensions import db
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    # Act - try to edit non-existent expense
+    response = client.post(
+        f"/groups/{group.id}/expense/99999/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "equal",
+            "participants": ["payer@example.com"],
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense not found" in response.data
+
+
+def test_edit_expense_wrong_group(client, app):
+    """Test that editing expense from different group fails."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group1 = Group(name="Group 1", created_by_id=payer.id)
+    group1.members.extend([payer, editor])
+    group2 = Group(name="Group 2", created_by_id=payer.id)
+    group2.members.append(payer)
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group1.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    # Act - try to edit expense from group1 while accessing group2
+    response = client.post(
+        f"/groups/{group2.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "equal",
+            "participants": ["payer@example.com"],
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense does not belong to this group" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_negative_amount(client, app):
+    """Test that editing expense with negative amount fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with negative amount
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "-10.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Amount must be greater than zero" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.amount == 30.0  # Should not be changed
+
+
+def test_edit_expense_zero_amount(client, app):
+    """Test that editing expense with zero amount fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with zero amount
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "0.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Amount must be greater than zero" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.amount == 30.0  # Should not be changed
+
+
+def test_edit_expense_invalid_payer(client, app):
+    """Test that editing with payer not in group fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([payer, editor, non_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with non-member as payer
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "nonmember@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Payer must be a member of the group" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.payer == "payer@example.com"  # Should not be changed
+
+
+def test_edit_expense_invalid_participants(client, app):
+    """Test that editing with participants not in group fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([payer, editor, non_member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with non-member as participant
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "nonmember@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"not in the group" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_invalid_split_sum(client, app):
+    """Test that editing with custom split not summing to amount fails."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with custom split that doesn't sum to amount
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "custom",
+            "custom_amount_payer@example.com": "30.00",
+            "custom_amount_editor@example.com": "15.00",  # Total = 45, but amount = 50
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"must equal total amount" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.amount == 30.0  # Should not be changed
+
+
+def test_edit_expense_updates_database(client, app):
+    """Test that editing expense updates the database correctly."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    import json
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner at restaurant"),
+            ("amount", "75.50"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    updated_expense = Expense.query.get(expense_id)
+    assert updated_expense is not None
+    assert updated_expense.description == "Dinner at restaurant"
+    assert updated_expense.amount == 75.5
+    assert updated_expense.payer == "editor@example.com"
+    assert updated_expense.split_type == "equal"
+    split_details = json.loads(updated_expense.split_details)
+    assert len(split_details) == 2
+    assert split_details["payer@example.com"] == 37.75
+    assert split_details["editor@example.com"] == 37.75
+
+
+def test_edit_expense_creates_notification(client, app):
+    """Test that editing an expense creates a database notification."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense, GroupNotification
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    notification = GroupNotification.query.filter_by(
+        group_id=group.id, notification_type="expense_edited"
+    ).first()
+    assert notification is not None
+    assert notification.description == "Dinner"
+    assert notification.amount == 50.0
+    assert notification.payer == "editor@example.com"
+    assert notification.edited_by == editor.email
+
+
+def test_group_member_sees_edit_notification(client, app):
+    """Test that group members see edit notification banner."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense, GroupNotification
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    viewer = User(email="viewer@example.com")
+    db.session.add_all([payer, editor, viewer])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor, viewer])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    # Edit expense as editor
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    client.post(f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data)
+
+    # View as viewer
+    with client.session_transaction() as sess:
+        sess["user_id"] = viewer.id
+        sess["user_email"] = viewer.email
+
+    # Act
+    response = client.get(f"/groups/{group.id}", follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense Edited" in response.data
+    assert b"Dinner" in response.data
+    assert b"$50.00" in response.data
+    assert b"editor@example.com" in response.data
+
+
+def test_edit_expense_sends_notifications(client, app):
+    """Test that editing expense sends terminal notifications to other members."""
+    # Arrange
+    from unittest.mock import patch
+    from io import StringIO
+
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    member = User(email="member@example.com")
+    db.session.add_all([payer, editor, member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor, member])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - capture print output
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    output = StringIO()
+    with patch("sys.stdout", output):
+        response = client.post(
+            f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+        )
+
+    printed_output = output.getvalue()
+
+    # Assert
+    assert response.status_code == 302
+    assert "EXPENSE EDIT NOTIFICATION" in printed_output
+    assert "Dinner" in printed_output
+    assert "$50.00" in printed_output
+    assert "To: payer@example.com" in printed_output
+    assert "To: member@example.com" in printed_output
+
+
+def test_edit_expense_no_notification_to_editor(client, app):
+    """Test that editor does not receive terminal notification."""
+    # Arrange
+    from unittest.mock import patch
+    from io import StringIO
+
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - capture print output
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    output = StringIO()
+    with patch("sys.stdout", output):
+        response = client.post(
+            f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+        )
+
+    printed_output = output.getvalue()
+
+    # Assert
+    assert response.status_code == 302
+    assert "To: editor@example.com" not in printed_output
+    assert "To: payer@example.com" in printed_output
+
+
+def test_edit_expense_handles_notification_error(client, app):
+    """Test that expense editing continues even if notification fails."""
+    # Arrange
+    from unittest.mock import patch
+
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense, GroupNotification
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - Simulate notification failure
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    with patch("routes.groups.notify_expense_edited", side_effect=Exception("Notification error")):
+        response = client.post(
+            f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+        )
+
+    # Assert - Expense should still be updated and notification should be created
+    assert response.status_code == 302
+    updated_expense = Expense.query.get(expense_id)
+    assert updated_expense is not None
+    assert updated_expense.description == "Dinner"
+    notification = GroupNotification.query.filter_by(
+        group_id=group.id, notification_type="expense_edited"
+    ).first()
+    assert notification is not None
+
+
+def test_edit_expense_missing_description(client, app):
+    """Test that editing expense without description fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with empty description
+    expense_data = MultiDict(
+        [
+            ("description", ""),  # Empty description
+            ("amount", "50.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Description is required" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_missing_payer(client, app):
+    """Test that editing expense without payer fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with empty payer
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", ""),  # Empty payer
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Payer is required" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.payer == "payer@example.com"  # Should not be changed
+
+
+def test_edit_expense_invalid_amount_format(client, app):
+    """Test that editing expense with invalid amount format fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with invalid amount (non-numeric)
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "not_a_number"),  # Invalid amount
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Please enter a valid amount" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.amount == 30.0  # Should not be changed
+
+
+def test_edit_expense_no_participants_equal_split(client, app):
+    """Test that editing expense with equal split but no participants fails."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with equal split but no participants selected
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "equal",
+            # No participants provided
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Please select at least one participant" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_invalid_custom_amount_format(client, app):
+    """Test that editing expense with invalid custom amount format fails."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with invalid custom amount (non-numeric)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "custom",
+            "custom_amount_payer@example.com": "not_a_number",  # Invalid custom amount
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Invalid amount" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.amount == 30.0  # Should not be changed
+
+
+def test_edit_expense_no_custom_split_amounts(client, app):
+    """Test that editing expense with custom split but no amounts fails."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with custom split but no amounts specified
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "custom",
+            # No custom_amount_* fields provided
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Please specify amounts for at least one participant" in response.data
+    expense = Expense.query.get(expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_user_not_found_error(client, app):
+    """Test edit expense handles user not found error."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    db.session.add(payer)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.append(payer)
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 30.0}',
+        participants="payer@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    # Act - Delete user after session is set up to test the defensive check
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        # Simulate user being deleted (defensive check in function)
+        db.session.delete(payer)
+        db.session.flush()  # Don't commit yet, but flush to make it visible
+
+    # The login_required decorator will catch this, but we test the defensive check
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "payer@example.com",
+            "split_type": "equal",
+            "participants": ["payer@example.com"],
+        },
+        follow_redirects=True,
+    )
+
+    # Assert - login_required decorator should redirect to login
+    assert response.status_code == 200
+
+
+def test_edit_expense_group_not_found_error(client, app):
+    """Test edit expense handles group not found error."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="user@example.com",
+        group_id=99999,  # Non-existent group
+        split_type="equal",
+        split_details='{"user@example.com": 30.0}',
+        participants="user@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        f"/groups/99999/expense/{expense_id}/edit",
+        data={
+            "description": "Dinner",
+            "amount": "50.00",
+            "payer": "user@example.com",
+            "split_type": "equal",
+            "participants": ["user@example.com"],
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
