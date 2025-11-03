@@ -403,7 +403,7 @@ def test_delete_expense_success(client, app):
 
     # Assert
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is None
+    assert db.session.get(Expense, expense_id) is None
 
 
 def test_delete_expense_requires_login(client, app):
@@ -441,7 +441,7 @@ def test_delete_expense_requires_login(client, app):
 
     # Assert - should redirect to login
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+    assert db.session.get(Expense, expense_id) is not None  # Expense should still exist
 
 
 def test_delete_expense_requires_membership(client, app):
@@ -484,7 +484,7 @@ def test_delete_expense_requires_membership(client, app):
 
     # Assert - should redirect
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+    assert db.session.get(Expense, expense_id) is not None  # Expense should still exist
 
 
 def test_delete_expense_not_found(client, app):
@@ -558,7 +558,7 @@ def test_delete_expense_wrong_group(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Expense does not belong to this group" in response.data
-    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+    assert db.session.get(Expense, expense_id) is not None  # Expense should still exist
 
 
 def test_delete_expense_removes_from_database(client, app):
@@ -591,7 +591,7 @@ def test_delete_expense_removes_from_database(client, app):
     expense_id = expense.id
 
     # Verify expense exists before deletion
-    assert Expense.query.get(expense_id) is not None
+    assert db.session.get(Expense, expense_id) is not None
 
     with client.session_transaction() as sess:
         sess["user_id"] = deleter.id
@@ -601,7 +601,7 @@ def test_delete_expense_removes_from_database(client, app):
     client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False)
 
     # Assert
-    assert Expense.query.get(expense_id) is None
+    assert db.session.get(Expense, expense_id) is None
 
 
 def test_delete_expense_redirects_correctly(client, app):
@@ -871,6 +871,240 @@ def test_delete_expense_group_not_found_error(client, app):
     assert b"Group not found" in response.data
 
 
+def test_edit_expense_with_percentage_split(client, app):
+    """Test editing an expense with percentage split."""
+    # Arrange
+    import json
+
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=100.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0, "user2@example.com": 50.0}',
+        participants="user1@example.com, user2@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Edit with percentage split (60% user1, 40% user2)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Expense",
+            "amount": "100.00",
+            "payer": "user1@example.com",
+            "split_type": "percentage",
+            "percentage_user1@example.com": "60",
+            "percentage_user2@example.com": "40",
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense.description == "Updated Expense"
+    assert updated_expense.split_type == "percentage"
+    split_details = json.loads(updated_expense.split_details)
+    assert split_details["user1@example.com"] == 60.0  # 60% of 100
+    assert split_details["user2@example.com"] == 40.0  # 40% of 100
+
+
+def test_edit_expense_with_shares_split(client, app):
+    """Test editing an expense with shares split."""
+    # Arrange
+    import json
+
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    user3 = User(email="user3@example.com")
+    db.session.add_all([user1, user2, user3])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2, user3])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=120.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 40.0, "user2@example.com": 40.0, "user3@example.com": 40.0}',
+        participants="user1@example.com, user2@example.com, user3@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Edit with shares split (2 shares user1, 1 share user2, 1 share user3)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Shares Expense",
+            "amount": "120.00",
+            "payer": "user1@example.com",
+            "split_type": "shares",
+            "shares_user1@example.com": "2",
+            "shares_user2@example.com": "1",
+            "shares_user3@example.com": "1",
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense.description == "Updated Shares Expense"
+    assert updated_expense.split_type == "shares"
+    split_details = json.loads(updated_expense.split_details)
+    # Total shares = 4, user1 gets 2/4 = 60, user2 gets 1/4 = 30, user3 gets 1/4 = 30
+    assert split_details["user1@example.com"] == 60.0
+    assert split_details["user2@example.com"] == 30.0
+    assert split_details["user3@example.com"] == 30.0
+
+
+def test_edit_expense_rejects_invalid_percentage_total(client, app):
+    """Test that editing with percentages not totaling 100% is rejected."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=100.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0, "user2@example.com": 50.0}',
+        participants="user1@example.com, user2@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Try to edit with percentages totaling 90% (invalid)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Expense",
+            "amount": "100.00",
+            "payer": "user1@example.com",
+            "split_type": "percentage",
+            "percentage_user1@example.com": "50",
+            "percentage_user2@example.com": "40",  # Total = 90%
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Percentages must sum to 100%" in response.data
+    # Expense should not be updated
+    unchanged_expense = db.session.get(Expense, expense_id)
+    assert unchanged_expense.description == "Original Expense"
+    assert unchanged_expense.split_type == "equal"
+
+
+def test_edit_expense_rejects_negative_shares(client, app):
+    """Test that editing with negative shares is rejected."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=100.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0, "user2@example.com": 50.0}',
+        participants="user1@example.com, user2@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Try to edit with negative shares
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Expense",
+            "amount": "100.00",
+            "payer": "user1@example.com",
+            "split_type": "shares",
+            "shares_user1@example.com": "2",
+            "shares_user2@example.com": "-1",  # Negative!
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Share count for user2@example.com must be positive" in response.data
+    # Expense should not be updated
+    unchanged_expense = db.session.get(Expense, expense_id)
+    assert unchanged_expense.description == "Original Expense"
+    assert unchanged_expense.split_type == "equal"
+
+
 def test_delete_expense_handles_notification_error(client, app):
     """Test that expense deletion continues even if notification fails."""
     # Arrange
@@ -913,7 +1147,7 @@ def test_delete_expense_handles_notification_error(client, app):
 
     # Assert - Expense should still be deleted and notification should be created
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is None
+    assert db.session.get(Expense, expense_id) is None
     notification = GroupNotification.query.filter_by(
         group_id=group.id, notification_type="expense_deleted"
     ).first()
@@ -1142,7 +1376,7 @@ def test_mark_notification_read_with_null_read_by(client, app):
 
     # Assert
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert viewer.id in read_by_ids
 
@@ -1189,7 +1423,7 @@ def test_mark_notification_read_already_read(client, app):
 
     # Assert - Should not add duplicate
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert read_by_ids.count(viewer.id) == 1  # Should only appear once
 
@@ -1236,7 +1470,7 @@ def test_mark_notification_read(client, app):
 
     # Assert
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert viewer.id in read_by_ids
 
@@ -1283,7 +1517,7 @@ def test_mark_notification_read_requires_membership(client, app):
 
     # Assert - should redirect and not mark as read
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert non_member.id not in read_by_ids
 
@@ -1410,7 +1644,7 @@ def test_edit_expense_success(client, app):
 
     # Assert
     assert response.status_code == 302
-    updated_expense = Expense.query.get(expense_id)
+    updated_expense = db.session.get(Expense, expense_id)
     assert updated_expense is not None
     assert updated_expense.description == "Dinner"
     assert updated_expense.amount == 50.0
@@ -1460,7 +1694,7 @@ def test_edit_expense_requires_login(client, app):
 
     # Assert - should redirect to login
     assert response.status_code == 302
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1513,7 +1747,7 @@ def test_edit_expense_requires_membership(client, app):
     # Assert - should redirect with error
     assert response.status_code == 200
     assert b"You are not a member of this group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1604,7 +1838,7 @@ def test_edit_expense_wrong_group(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Expense does not belong to this group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1661,7 +1895,7 @@ def test_edit_expense_negative_amount(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Amount must be greater than zero" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -1718,7 +1952,7 @@ def test_edit_expense_zero_amount(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Amount must be greater than zero" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -1776,7 +2010,7 @@ def test_edit_expense_invalid_payer(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Payer must be a member of the group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.payer == "payer@example.com"  # Should not be changed
 
 
@@ -1834,7 +2068,7 @@ def test_edit_expense_invalid_participants(client, app):
     # Assert
     assert response.status_code == 200
     assert b"not in the group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1888,7 +2122,7 @@ def test_edit_expense_invalid_split_sum(client, app):
     # Assert
     assert response.status_code == 200
     assert b"must equal total amount" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -1946,7 +2180,7 @@ def test_edit_expense_updates_database(client, app):
 
     # Assert
     assert response.status_code == 302
-    updated_expense = Expense.query.get(expense_id)
+    updated_expense = db.session.get(Expense, expense_id)
     assert updated_expense is not None
     assert updated_expense.description == "Dinner at restaurant"
     assert updated_expense.amount == 75.5
@@ -2270,7 +2504,7 @@ def test_edit_expense_handles_notification_error(client, app):
 
     # Assert - Expense should still be updated and notification should be created
     assert response.status_code == 302
-    updated_expense = Expense.query.get(expense_id)
+    updated_expense = db.session.get(Expense, expense_id)
     assert updated_expense is not None
     assert updated_expense.description == "Dinner"
     notification = GroupNotification.query.filter_by(
@@ -2332,7 +2566,7 @@ def test_edit_expense_missing_description(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Description is required" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -2389,7 +2623,7 @@ def test_edit_expense_missing_payer(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Payer is required" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.payer == "payer@example.com"  # Should not be changed
 
 
@@ -2446,7 +2680,7 @@ def test_edit_expense_invalid_amount_format(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Please enter a valid amount" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -2499,7 +2733,7 @@ def test_edit_expense_no_participants_equal_split(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Please select at least one participant" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -2552,7 +2786,7 @@ def test_edit_expense_invalid_custom_amount_format(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Invalid amount" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -2605,7 +2839,7 @@ def test_edit_expense_no_custom_split_amounts(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Please specify amounts for at least one participant" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 

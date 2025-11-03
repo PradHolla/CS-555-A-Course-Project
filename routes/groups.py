@@ -194,7 +194,59 @@ def group_expenses(group_id):
             # Calculate equal split
             split_details = ExpenseService.calculate_equal_split(selected_participants, amount)
 
-        else:  # custom split
+        elif split_type == "percentage":
+            # Get percentage split
+            percentages = {}
+            for member_email in group_member_emails:
+                percentage_key = f"percentage_{member_email}"
+                percentage_value = request.form.get(percentage_key, "").strip()
+                if percentage_value:
+                    try:
+                        percentages[member_email] = float(percentage_value)
+                    except ValueError:
+                        flash(f"Invalid percentage for {member_email}", "error")
+                        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+            if not percentages:
+                flash("Please specify percentages for at least one participant", "error")
+                return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+            # Validate percentage split
+            is_valid, error_msg = ExpenseService.validate_percentage_split(percentages)
+            if not is_valid:
+                flash(error_msg, "error")
+                return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+            # Calculate amounts from percentages
+            split_details = ExpenseService.calculate_percentage_split(percentages, amount)
+
+        elif split_type == "shares":
+            # Get shares split
+            shares = {}
+            for member_email in group_member_emails:
+                shares_key = f"shares_{member_email}"
+                shares_value = request.form.get(shares_key, "").strip()
+                if shares_value:
+                    try:
+                        shares[member_email] = int(shares_value)
+                    except ValueError:
+                        flash(f"Invalid shares count for {member_email}", "error")
+                        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+            if not shares:
+                flash("Please specify shares for at least one participant", "error")
+                return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+            # Validate shares split
+            is_valid, error_msg = ExpenseService.validate_shares_split(shares)
+            if not is_valid:
+                flash(error_msg, "error")
+                return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+            # Calculate amounts from shares
+            split_details = ExpenseService.calculate_shares_split(shares, amount)
+
+        else:  # custom split (by amount)
             # Get custom split amounts
             split_details = {}
             for member_email in group_member_emails:
@@ -513,6 +565,58 @@ def edit_expense(group_id, expense_id):
         # Calculate equal split
         split_details = ExpenseService.calculate_equal_split(selected_participants, amount)
 
+    elif split_type == "percentage":
+        # Get percentage split
+        split_details = {}
+        for member_email in group_member_emails:
+            percentage_key = f"percentage_{member_email}"
+            percentage_value = request.form.get(percentage_key, "").strip()
+            if percentage_value:
+                try:
+                    split_details[member_email] = float(percentage_value)
+                except ValueError:
+                    flash(f"Invalid percentage for {member_email}", "error")
+                    return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        if not split_details:
+            flash("Please specify percentages for at least one participant", "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Validate percentage split
+        is_valid, error_msg = ExpenseService.validate_percentage_split(split_details)
+        if not is_valid:
+            flash(error_msg, "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Calculate amounts from percentages
+        split_details = ExpenseService.calculate_percentage_split(split_details, amount)
+
+    elif split_type == "shares":
+        # Get shares split
+        split_details = {}
+        for member_email in group_member_emails:
+            shares_key = f"shares_{member_email}"
+            shares_value = request.form.get(shares_key, "").strip()
+            if shares_value:
+                try:
+                    split_details[member_email] = float(shares_value)
+                except ValueError:
+                    flash(f"Invalid shares for {member_email}", "error")
+                    return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        if not split_details:
+            flash("Please specify shares for at least one participant", "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Validate shares split
+        is_valid, error_msg = ExpenseService.validate_shares_split(split_details)
+        if not is_valid:
+            flash(error_msg, "error")
+            return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+        # Calculate amounts from shares
+        split_details = ExpenseService.calculate_shares_split(split_details, amount)
+
     else:  # custom split
         # Get custom split amounts
         split_details = {}
@@ -535,6 +639,7 @@ def edit_expense(group_id, expense_id):
         if not is_valid:
             flash(error_msg, "error")
             return redirect(url_for("groups.group_expenses", group_id=group_id))
+
 
     # Store old expense values for notification (before update)
     old_description = expense.description

@@ -57,8 +57,10 @@ class Expense(db.Model):
     group_id = db.Column(
         db.Integer, db.ForeignKey("group.id"), nullable=True
     )  # Start as nullable for migration
-    split_type = db.Column(db.String(20), nullable=False, default="equal")  # 'equal' or 'custom'
-    split_details = db.Column(db.Text)  # JSON string: {"member": amount}
+    split_type = db.Column(
+        db.String(20), nullable=False, default="equal"
+    )  # 'equal', 'custom', 'percentage', or 'shares'
+    split_details = db.Column(db.Text)  # JSON string: {"member": amount/percentage/shares}
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship

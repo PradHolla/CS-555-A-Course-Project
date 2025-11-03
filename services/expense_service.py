@@ -185,3 +185,99 @@ class ExpenseService:
 
         share = total_amount / len(participants)
         return {participant: share for participant in participants}
+
+    @staticmethod
+    def calculate_percentage_split(percentages, total_amount):
+        """
+        Calculate split based on percentages.
+
+        Args:
+            percentages: Dictionary mapping participant names to their percentage (0-100)
+            total_amount: Total expense amount
+
+        Returns:
+            Dictionary mapping participant names to their calculated amount
+        """
+        if not percentages:
+            return {}
+
+        return {
+            participant: (percentage / 100.0) * total_amount
+            for participant, percentage in percentages.items()
+        }
+
+    @staticmethod
+    def validate_percentage_split(percentages):
+        """
+        Validate that percentages are valid and sum to 100.
+
+        Args:
+            percentages: Dictionary mapping participant names to percentages
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not percentages:
+            return False, "No participants specified"
+
+        # Check for negative percentages
+        for participant, percentage in percentages.items():
+            if percentage < 0:
+                return False, f"Percentage for {participant} cannot be negative"
+
+        total_percentage = sum(percentages.values())
+        tolerance = 0.01  # Allow small floating point differences
+
+        if abs(total_percentage - 100.0) > tolerance:
+            return (
+                False,
+                f"Percentages must sum to 100% (current total: {total_percentage:.2f}%)",
+            )
+
+        return True, None
+
+    @staticmethod
+    def calculate_shares_split(shares, total_amount):
+        """
+        Calculate split based on shares.
+
+        Args:
+            shares: Dictionary mapping participant names to their number of shares
+            total_amount: Total expense amount
+
+        Returns:
+            Dictionary mapping participant names to their calculated amount
+        """
+        if not shares:
+            return {}
+
+        total_shares = sum(shares.values())
+        if total_shares == 0:
+            return {}
+
+        return {
+            participant: (share_count / total_shares) * total_amount
+            for participant, share_count in shares.items()
+        }
+
+    @staticmethod
+    def validate_shares_split(shares):
+        """
+        Validate that shares are valid positive numbers.
+
+        Args:
+            shares: Dictionary mapping participant names to share counts
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not shares:
+            return False, "No participants specified"
+
+        # Check for non-positive shares
+        for participant, share_count in shares.items():
+            if share_count <= 0:
+                return False, f"Share count for {participant} must be positive"
+
+        return True, None
+
