@@ -1410,7 +1410,7 @@ def test_edit_expense_success(client, app):
 
     # Assert
     assert response.status_code == 302
-    updated_expense = Expense.query.get(expense_id)
+    updated_expense = db.session.get(Expense, expense_id)
     assert updated_expense is not None
     assert updated_expense.description == "Dinner"
     assert updated_expense.amount == 50.0
@@ -1460,7 +1460,7 @@ def test_edit_expense_requires_login(client, app):
 
     # Assert - should redirect to login
     assert response.status_code == 302
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1513,7 +1513,7 @@ def test_edit_expense_requires_membership(client, app):
     # Assert - should redirect with error
     assert response.status_code == 200
     assert b"You are not a member of this group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1604,7 +1604,7 @@ def test_edit_expense_wrong_group(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Expense does not belong to this group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1661,7 +1661,7 @@ def test_edit_expense_negative_amount(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Amount must be greater than zero" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -1718,7 +1718,7 @@ def test_edit_expense_zero_amount(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Amount must be greater than zero" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -1776,7 +1776,7 @@ def test_edit_expense_invalid_payer(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Payer must be a member of the group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.payer == "payer@example.com"  # Should not be changed
 
 
@@ -1834,7 +1834,7 @@ def test_edit_expense_invalid_participants(client, app):
     # Assert
     assert response.status_code == 200
     assert b"not in the group" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -1888,7 +1888,7 @@ def test_edit_expense_invalid_split_sum(client, app):
     # Assert
     assert response.status_code == 200
     assert b"must equal total amount" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -1946,7 +1946,7 @@ def test_edit_expense_updates_database(client, app):
 
     # Assert
     assert response.status_code == 302
-    updated_expense = Expense.query.get(expense_id)
+    updated_expense = db.session.get(Expense, expense_id)
     assert updated_expense is not None
     assert updated_expense.description == "Dinner at restaurant"
     assert updated_expense.amount == 75.5
@@ -2270,7 +2270,7 @@ def test_edit_expense_handles_notification_error(client, app):
 
     # Assert - Expense should still be updated and notification should be created
     assert response.status_code == 302
-    updated_expense = Expense.query.get(expense_id)
+    updated_expense = db.session.get(Expense, expense_id)
     assert updated_expense is not None
     assert updated_expense.description == "Dinner"
     notification = GroupNotification.query.filter_by(
@@ -2332,7 +2332,7 @@ def test_edit_expense_missing_description(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Description is required" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -2389,7 +2389,7 @@ def test_edit_expense_missing_payer(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Payer is required" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.payer == "payer@example.com"  # Should not be changed
 
 
@@ -2446,7 +2446,7 @@ def test_edit_expense_invalid_amount_format(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Please enter a valid amount" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -2499,7 +2499,7 @@ def test_edit_expense_no_participants_equal_split(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Please select at least one participant" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
@@ -2552,7 +2552,7 @@ def test_edit_expense_invalid_custom_amount_format(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Invalid amount" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.amount == 30.0  # Should not be changed
 
 
@@ -2605,7 +2605,7 @@ def test_edit_expense_no_custom_split_amounts(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Please specify amounts for at least one participant" in response.data
-    expense = Expense.query.get(expense_id)
+    expense = db.session.get(Expense, expense_id)
     assert expense.description == "Lunch"  # Should not be changed
 
 
