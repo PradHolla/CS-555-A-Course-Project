@@ -871,6 +871,240 @@ def test_delete_expense_group_not_found_error(client, app):
     assert b"Group not found" in response.data
 
 
+def test_edit_expense_with_percentage_split(client, app):
+    """Test editing an expense with percentage split."""
+    # Arrange
+    import json
+
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=100.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0, "user2@example.com": 50.0}',
+        participants="user1@example.com, user2@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Edit with percentage split (60% user1, 40% user2)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Expense",
+            "amount": "100.00",
+            "payer": "user1@example.com",
+            "split_type": "percentage",
+            "percentage_user1@example.com": "60",
+            "percentage_user2@example.com": "40",
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense.description == "Updated Expense"
+    assert updated_expense.split_type == "percentage"
+    split_details = json.loads(updated_expense.split_details)
+    assert split_details["user1@example.com"] == 60.0  # 60% of 100
+    assert split_details["user2@example.com"] == 40.0  # 40% of 100
+
+
+def test_edit_expense_with_shares_split(client, app):
+    """Test editing an expense with shares split."""
+    # Arrange
+    import json
+
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    user3 = User(email="user3@example.com")
+    db.session.add_all([user1, user2, user3])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2, user3])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=120.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 40.0, "user2@example.com": 40.0, "user3@example.com": 40.0}',
+        participants="user1@example.com, user2@example.com, user3@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Edit with shares split (2 shares user1, 1 share user2, 1 share user3)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Shares Expense",
+            "amount": "120.00",
+            "payer": "user1@example.com",
+            "split_type": "shares",
+            "shares_user1@example.com": "2",
+            "shares_user2@example.com": "1",
+            "shares_user3@example.com": "1",
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense.description == "Updated Shares Expense"
+    assert updated_expense.split_type == "shares"
+    split_details = json.loads(updated_expense.split_details)
+    # Total shares = 4, user1 gets 2/4 = 60, user2 gets 1/4 = 30, user3 gets 1/4 = 30
+    assert split_details["user1@example.com"] == 60.0
+    assert split_details["user2@example.com"] == 30.0
+    assert split_details["user3@example.com"] == 30.0
+
+
+def test_edit_expense_rejects_invalid_percentage_total(client, app):
+    """Test that editing with percentages not totaling 100% is rejected."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=100.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0, "user2@example.com": 50.0}',
+        participants="user1@example.com, user2@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Try to edit with percentages totaling 90% (invalid)
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Expense",
+            "amount": "100.00",
+            "payer": "user1@example.com",
+            "split_type": "percentage",
+            "percentage_user1@example.com": "50",
+            "percentage_user2@example.com": "40",  # Total = 90%
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Percentages must sum to 100%" in response.data
+    # Expense should not be updated
+    unchanged_expense = db.session.get(Expense, expense_id)
+    assert unchanged_expense.description == "Original Expense"
+    assert unchanged_expense.split_type == "equal"
+
+
+def test_edit_expense_rejects_negative_shares(client, app):
+    """Test that editing with negative shares is rejected."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.extend([user1, user2])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Original Expense",
+        amount=100.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0, "user2@example.com": 50.0}',
+        participants="user1@example.com, user2@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user1.id
+        sess["user_email"] = user1.email
+
+    # Act - Try to edit with negative shares
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit",
+        data={
+            "description": "Updated Expense",
+            "amount": "100.00",
+            "payer": "user1@example.com",
+            "split_type": "shares",
+            "shares_user1@example.com": "2",
+            "shares_user2@example.com": "-1",  # Negative!
+        },
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Share count for user2@example.com must be positive" in response.data
+    # Expense should not be updated
+    unchanged_expense = db.session.get(Expense, expense_id)
+    assert unchanged_expense.description == "Original Expense"
+    assert unchanged_expense.split_type == "equal"
+
+
 def test_delete_expense_handles_notification_error(client, app):
     """Test that expense deletion continues even if notification fails."""
     # Arrange
