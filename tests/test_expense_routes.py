@@ -1227,3 +1227,213 @@ def test_expense_splitter_displays_user_display_names(client, app):
     assert b"Bob Jones" in response.data
     # Emails should not be visible as standalone text (they're in email_to_name mapping)
     # Note: emails still exist in HTML attributes and data structures, so we check for display names
+
+
+def test_expense_splitter_creates_percentage_split_expense(client, app):
+    """Test creating expense with percentage-based split."""
+    # Arrange
+    from extensions import db
+
+    alice = User(email="alice@example.com")
+    bob = User(email="bob@example.com")
+    charlie = User(email="charlie@example.com")
+    db.session.add_all([alice, bob, charlie])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alice.id)
+    group.members.extend([alice, bob, charlie])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
+
+    expense_data = {
+        "description": "Dinner",
+        "amount": "100.00",
+        "payer": "alice@example.com",
+        "split_type": "percentage",
+        "percentage_alice@example.com": "50",
+        "percentage_bob@example.com": "30",
+        "percentage_charlie@example.com": "20",
+    }
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Redirect after success
+    stored = Expense.query.filter_by(description="Dinner", group_id=group.id).first()
+    assert stored is not None
+    assert stored.split_type == "percentage"
+
+    # Check split details
+    import json
+    split_details = json.loads(stored.split_details)
+    assert split_details["alice@example.com"] == 50.0
+    assert split_details["bob@example.com"] == 30.0
+    assert split_details["charlie@example.com"] == 20.0
+
+
+def test_expense_splitter_rejects_percentage_not_100(client, app):
+    """Test that percentages must sum to 100%."""
+    # Arrange
+    from extensions import db
+
+    alice = User(email="alice@example.com")
+    bob = User(email="bob@example.com")
+    db.session.add_all([alice, bob])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alice.id)
+    group.members.extend([alice, bob])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
+
+    expense_data = {
+        "description": "Invalid Percentage",
+        "amount": "100.00",
+        "payer": "alice@example.com",
+        "split_type": "percentage",
+        "percentage_alice@example.com": "60",
+        "percentage_bob@example.com": "30",  # Total = 90%, not 100%
+    }
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200  # Stays on page
+    assert b"Percentages must sum to 100%" in response.data
+    # Ensure expense wasn't created
+    stored = Expense.query.filter_by(description="Invalid Percentage").first()
+    assert stored is None
+
+
+def test_expense_splitter_rejects_negative_percentages(client, app):
+    """Test that negative percentages are rejected."""
+    # Arrange
+    from extensions import db
+
+    alice = User(email="alice@example.com")
+    bob = User(email="bob@example.com")
+    db.session.add_all([alice, bob])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alice.id)
+    group.members.extend([alice, bob])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
+
+    expense_data = {
+        "description": "Negative Percentage",
+        "amount": "100.00",
+        "payer": "alice@example.com",
+        "split_type": "percentage",
+        "percentage_alice@example.com": "120",
+        "percentage_bob@example.com": "-20",  # Negative!
+    }
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Percentages cannot be negative" in response.data
+    stored = Expense.query.filter_by(description="Negative Percentage").first()
+    assert stored is None
+
+
+def test_expense_splitter_creates_shares_split_expense(client, app):
+    """Test creating expense with shares-based split."""
+    # Arrange
+    from extensions import db
+
+    alice = User(email="alice@example.com")
+    bob = User(email="bob@example.com")
+    charlie = User(email="charlie@example.com")
+    db.session.add_all([alice, bob, charlie])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alice.id)
+    group.members.extend([alice, bob, charlie])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
+
+    expense_data = {
+        "description": "Shared Meal",
+        "amount": "120.00",
+        "payer": "alice@example.com",
+        "split_type": "shares",
+        "shares_alice@example.com": "2",
+        "shares_bob@example.com": "1",
+        "shares_charlie@example.com": "1",
+    }
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+    stored = Expense.query.filter_by(description="Shared Meal", group_id=group.id).first()
+    assert stored is not None
+    assert stored.split_type == "shares"
+
+    # Check split details
+    import json
+    split_details = json.loads(stored.split_details)
+    # Alice gets 2/4 = $60, Bob and Charlie each get 1/4 = $30
+    assert split_details["alice@example.com"] == 60.0
+    assert split_details["bob@example.com"] == 30.0
+    assert split_details["charlie@example.com"] == 30.0
+
+
+def test_expense_splitter_rejects_negative_shares(client, app):
+    """Test that negative or zero shares are rejected."""
+    # Arrange
+    from extensions import db
+
+    alice = User(email="alice@example.com")
+    bob = User(email="bob@example.com")
+    db.session.add_all([alice, bob])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=alice.id)
+    group.members.extend([alice, bob])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = alice.id
+        session["user_email"] = "alice@example.com"
+
+    expense_data = {
+        "description": "Invalid Shares",
+        "amount": "100.00",
+        "payer": "alice@example.com",
+        "split_type": "shares",
+        "shares_alice@example.com": "2",
+        "shares_bob@example.com": "-1",  # Negative!
+    }
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"must be positive" in response.data  # More flexible assertion
+    stored = Expense.query.filter_by(description="Invalid Shares").first()
+    assert stored is None

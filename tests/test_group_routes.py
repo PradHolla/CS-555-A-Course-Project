@@ -403,7 +403,7 @@ def test_delete_expense_success(client, app):
 
     # Assert
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is None
+    assert db.session.get(Expense, expense_id) is None
 
 
 def test_delete_expense_requires_login(client, app):
@@ -441,7 +441,7 @@ def test_delete_expense_requires_login(client, app):
 
     # Assert - should redirect to login
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+    assert db.session.get(Expense, expense_id) is not None  # Expense should still exist
 
 
 def test_delete_expense_requires_membership(client, app):
@@ -484,7 +484,7 @@ def test_delete_expense_requires_membership(client, app):
 
     # Assert - should redirect
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+    assert db.session.get(Expense, expense_id) is not None  # Expense should still exist
 
 
 def test_delete_expense_not_found(client, app):
@@ -558,7 +558,7 @@ def test_delete_expense_wrong_group(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Expense does not belong to this group" in response.data
-    assert Expense.query.get(expense_id) is not None  # Expense should still exist
+    assert db.session.get(Expense, expense_id) is not None  # Expense should still exist
 
 
 def test_delete_expense_removes_from_database(client, app):
@@ -591,7 +591,7 @@ def test_delete_expense_removes_from_database(client, app):
     expense_id = expense.id
 
     # Verify expense exists before deletion
-    assert Expense.query.get(expense_id) is not None
+    assert db.session.get(Expense, expense_id) is not None
 
     with client.session_transaction() as sess:
         sess["user_id"] = deleter.id
@@ -601,7 +601,7 @@ def test_delete_expense_removes_from_database(client, app):
     client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False)
 
     # Assert
-    assert Expense.query.get(expense_id) is None
+    assert db.session.get(Expense, expense_id) is None
 
 
 def test_delete_expense_redirects_correctly(client, app):
@@ -913,7 +913,7 @@ def test_delete_expense_handles_notification_error(client, app):
 
     # Assert - Expense should still be deleted and notification should be created
     assert response.status_code == 302
-    assert Expense.query.get(expense_id) is None
+    assert db.session.get(Expense, expense_id) is None
     notification = GroupNotification.query.filter_by(
         group_id=group.id, notification_type="expense_deleted"
     ).first()
@@ -1142,7 +1142,7 @@ def test_mark_notification_read_with_null_read_by(client, app):
 
     # Assert
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert viewer.id in read_by_ids
 
@@ -1189,7 +1189,7 @@ def test_mark_notification_read_already_read(client, app):
 
     # Assert - Should not add duplicate
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert read_by_ids.count(viewer.id) == 1  # Should only appear once
 
@@ -1236,7 +1236,7 @@ def test_mark_notification_read(client, app):
 
     # Assert
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert viewer.id in read_by_ids
 
@@ -1283,7 +1283,7 @@ def test_mark_notification_read_requires_membership(client, app):
 
     # Assert - should redirect and not mark as read
     assert response.status_code == 302
-    notification = GroupNotification.query.get(notification_id)
+    notification = db.session.get(GroupNotification, notification_id)
     read_by_ids = json.loads(notification.read_by)
     assert non_member.id not in read_by_ids
 

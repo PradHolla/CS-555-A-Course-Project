@@ -160,14 +160,22 @@
             <!-- Split Type -->
             <div>
                 <label class="block text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">Split Type *</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center cursor-pointer p-2 bg-slate-950/30 rounded-lg hover:bg-slate-950/50 transition-colors">
                         <input type="radio" name="split_type" value="equal" checked class="mr-2">
                         <span class="text-sm">Equal Split</span>
                     </label>
-                    <label class="flex items-center">
+                    <label class="flex items-center cursor-pointer p-2 bg-slate-950/30 rounded-lg hover:bg-slate-950/50 transition-colors">
+                        <input type="radio" name="split_type" value="percentage" class="mr-2">
+                        <span class="text-sm">Percentage</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer p-2 bg-slate-950/30 rounded-lg hover:bg-slate-950/50 transition-colors">
+                        <input type="radio" name="split_type" value="shares" class="mr-2">
+                        <span class="text-sm">Shares</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer p-2 bg-slate-950/30 rounded-lg hover:bg-slate-950/50 transition-colors">
                         <input type="radio" name="split_type" value="custom" class="mr-2">
-                        <span class="text-sm">Custom Split</span>
+                        <span class="text-sm">Custom Amount</span>
                     </label>
                 </div>
             </div>
@@ -191,6 +199,28 @@
                 </div>
                 <div id="customSplitSummary" class="mt-2 text-sm text-cyan-300" style="display: none;">
                     Total: $<span id="customTotal">0.00</span> / $<span id="customExpected">0.00</span>
+                </div>
+            </div>
+
+            <!-- Percentage Split Options -->
+            <div id="percentageSplitOptions" class="split-option">
+                <label class="block text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">Percentages (%) *</label>
+                <div id="percentageList" class="space-y-2">
+                    <p class="text-sm text-gray-400">Select a group first to see members</p>
+                </div>
+                <div id="percentageSplitSummary" class="mt-2 text-sm text-cyan-300" style="display: none;">
+                    Total: <span id="percentageTotal">0.00</span>% / 100%
+                </div>
+            </div>
+
+            <!-- Shares Split Options -->
+            <div id="sharesSplitOptions" class="split-option">
+                <label class="block text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">Shares *</label>
+                <div id="sharesList" class="space-y-2">
+                    <p class="text-sm text-gray-400">Select a group first to see members</p>
+                </div>
+                <div id="sharesSplitSummary" class="mt-2 text-sm text-cyan-300" style="display: none;">
+                    Total shares: <span id="sharesTotal">0</span> | <span id="sharesAmount">$0.00</span> per share
                 </div>
             </div>
 
@@ -314,13 +344,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const splitTypeRadios = document.querySelectorAll('input[name="split_type"]');
     const equalSplitOptions = document.getElementById('equalSplitOptions');
     const customSplitOptions = document.getElementById('customSplitOptions');
+    const percentageSplitOptions = document.getElementById('percentageSplitOptions');
+    const sharesSplitOptions = document.getElementById('sharesSplitOptions');
     const participantsList = document.getElementById('participantsList');
     const customAmountsList = document.getElementById('customAmountsList');
+    const percentageList = document.getElementById('percentageList');
+    const sharesList = document.getElementById('sharesList');
     const equalSplitSummary = document.getElementById('equalSplitSummary');
     const customSplitSummary = document.getElementById('customSplitSummary');
+    const percentageSplitSummary = document.getElementById('percentageSplitSummary');
+    const sharesSplitSummary = document.getElementById('sharesSplitSummary');
     const splitAmount = document.getElementById('splitAmount');
     const customTotal = document.getElementById('customTotal');
     const customExpected = document.getElementById('customExpected');
+    const percentageTotal = document.getElementById('percentageTotal');
+    const sharesTotal = document.getElementById('sharesTotal');
+    const sharesAmount = document.getElementById('sharesAmount');
 
     // Auto-load current group (first/only group in groups_data)
     function loadGroup() {
@@ -362,6 +401,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 customAmountsList.appendChild(div);
             });
             
+            // Update percentage list
+            percentageList.innerHTML = '';
+            members.forEach(member => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-2';
+                div.innerHTML = `
+                    <label class="text-sm w-20">${member.display_name}:</label>
+                    <input type="number" name="percentage_${member.email}" step="0.01" min="0" max="100" 
+                           class="flex-1 px-2 py-1 bg-slate-950/50 border border-cyan-500/30 rounded text-sm percentage-input" placeholder="%">
+                `;
+                percentageList.appendChild(div);
+            });
+            
+            // Update shares list
+            sharesList.innerHTML = '';
+            members.forEach(member => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-2';
+                div.innerHTML = `
+                    <label class="text-sm w-20">${member.display_name}:</label>
+                    <input type="number" name="shares_${member.email}" step="1" min="0" 
+                           class="flex-1 px-2 py-1 bg-slate-950/50 border border-cyan-500/30 rounded text-sm shares-input" placeholder="shares">
+                `;
+                sharesList.appendChild(div);
+            });
+            
             updateSplitCalculations();
         }
     }
@@ -372,11 +437,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle split type change
     splitTypeRadios.forEach(radio => {
         radio.addEventListener('change', function() {
+            // Hide all split options
+            equalSplitOptions.classList.remove('active');
+            customSplitOptions.classList.remove('active');
+            percentageSplitOptions.classList.remove('active');
+            sharesSplitOptions.classList.remove('active');
+            
+            // Show selected split option
             if (this.value === 'equal') {
                 equalSplitOptions.classList.add('active');
-                customSplitOptions.classList.remove('active');
-            } else {
-                equalSplitOptions.classList.remove('active');
+            } else if (this.value === 'percentage') {
+                percentageSplitOptions.classList.add('active');
+            } else if (this.value === 'shares') {
+                sharesSplitOptions.classList.add('active');
+            } else if (this.value === 'custom') {
                 customSplitOptions.classList.add('active');
             }
             updateSplitCalculations();
@@ -396,6 +470,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Handle percentage changes
+    percentageList.addEventListener('input', function(e) {
+        if (e.target.classList.contains('percentage-input')) {
+            updateSplitCalculations();
+        }
+    });
+
+    // Handle shares changes
+    sharesList.addEventListener('input', function(e) {
+        if (e.target.classList.contains('shares-input')) {
+            updateSplitCalculations();
+        }
+    });
+
     function updateSplitCalculations() {
         const amount = parseFloat(amountInput.value) || 0;
         const selectedSplitType = document.querySelector('input[name="split_type"]:checked').value;
@@ -411,7 +499,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 equalSplitSummary.style.display = 'none';
             }
-        } else {
+        } else if (selectedSplitType === 'custom') {
             const customInputs = customAmountsList.querySelectorAll('.custom-amount-input');
             let total = 0;
             customInputs.forEach(input => {
@@ -431,6 +519,42 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 customSplitSummary.style.display = 'none';
             }
+        } else if (selectedSplitType === 'percentage') {
+            const percentageInputs = percentageList.querySelectorAll('.percentage-input');
+            let total = 0;
+            percentageInputs.forEach(input => {
+                total += parseFloat(input.value) || 0;
+            });
+            
+            percentageTotal.textContent = total.toFixed(2);
+            
+            if (amount > 0) {
+                percentageSplitSummary.style.display = 'block';
+                if (Math.abs(total - 100) < 0.01) {
+                    percentageSplitSummary.className = 'mt-2 text-sm text-green-300';
+                } else {
+                    percentageSplitSummary.className = 'mt-2 text-sm text-red-300';
+                }
+            } else {
+                percentageSplitSummary.style.display = 'none';
+            }
+        } else if (selectedSplitType === 'shares') {
+            const sharesInputs = sharesList.querySelectorAll('.shares-input');
+            let total = 0;
+            sharesInputs.forEach(input => {
+                total += parseInt(input.value) || 0;
+            });
+            
+            sharesTotal.textContent = total;
+            
+            if (amount > 0 && total > 0) {
+                const amountPerShare = amount / total;
+                sharesAmount.textContent = '$' + amountPerShare.toFixed(2);
+                sharesSplitSummary.style.display = 'block';
+                sharesSplitSummary.className = 'mt-2 text-sm text-cyan-300';
+            } else {
+                sharesSplitSummary.style.display = 'none';
+            }
         }
     }
 
@@ -446,7 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Validate participants
+        // Validate based on split type
         if (selectedSplitType === 'equal') {
             const selectedParticipants = participantsList.querySelectorAll('input[type="checkbox"]:checked');
             if (selectedParticipants.length === 0) {
@@ -454,7 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Please select at least one participant');
                 return;
             }
-        } else {
+        } else if (selectedSplitType === 'custom') {
             const customInputs = customAmountsList.querySelectorAll('.custom-amount-input');
             let total = 0;
             let hasAnyAmount = false;
@@ -474,6 +598,54 @@ document.addEventListener('DOMContentLoaded', function() {
             if (Math.abs(total - amount) > 0.01) {
                 e.preventDefault();
                 alert(`Custom split total ($${total.toFixed(2)}) must equal expense amount ($${amount.toFixed(2)})`);
+                return;
+            }
+        } else if (selectedSplitType === 'percentage') {
+            const percentageInputs = percentageList.querySelectorAll('.percentage-input');
+            let total = 0;
+            let hasAnyPercentage = false;
+            
+            percentageInputs.forEach(input => {
+                const value = parseFloat(input.value) || 0;
+                if (value < 0) {
+                    e.preventDefault();
+                    alert('Percentages cannot be negative');
+                    return;
+                }
+                total += value;
+                if (value > 0) hasAnyPercentage = true;
+            });
+            
+            if (!hasAnyPercentage) {
+                e.preventDefault();
+                alert('Please specify percentages for at least one participant');
+                return;
+            }
+            
+            if (Math.abs(total - 100) > 0.01) {
+                e.preventDefault();
+                alert(`Percentages must sum to 100% (current total: ${total.toFixed(2)}%)`);
+                return;
+            }
+        } else if (selectedSplitType === 'shares') {
+            const sharesInputs = sharesList.querySelectorAll('.shares-input');
+            let total = 0;
+            let hasAnyShares = false;
+            
+            sharesInputs.forEach(input => {
+                const value = parseInt(input.value) || 0;
+                if (value < 0) {
+                    e.preventDefault();
+                    alert('Shares cannot be negative');
+                    return;
+                }
+                total += value;
+                if (value > 0) hasAnyShares = true;
+            });
+            
+            if (!hasAnyShares) {
+                e.preventDefault();
+                alert('Please specify shares for at least one participant');
                 return;
             }
         }
