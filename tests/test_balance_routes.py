@@ -225,3 +225,91 @@ def test_balance_summary_handles_nonexistent_user_emails(client, app):
     # Should display email addresses as fallback when user not found (line 217 coverage)
     assert b"nonexistent@example.com" in response.data
     assert b"another@example.com" in response.data
+
+
+def test_balance_summary_includes_detailed_breakdown(client, app):
+    """Test that balance summary includes detailed breakdown data."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as session:
+        session["user_id"] = user_id
+        session["user_email"] = "test@example.com"
+
+    # Alice paid $30 for lunch split equally
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="Alice",
+        participants="Alice, Bob, Charlie",
+        split_type="equal",
+        split_details='{"Alice": 10.0, "Bob": 10.0, "Charlie": 10.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Act
+    response = client.get("/balance-summary")
+
+    # Assert
+    assert response.status_code == 200
+    # Should include detailed breakdown view elements
+    assert b"Detailed Breakdown" in response.data
+    assert b"Simplified Pay" in response.data
+    # Should show expense description in detailed view
+    assert b"Lunch" in response.data
+
+
+def test_balance_summary_detailed_breakdown_with_multiple_expenses(client, app):
+    """Test detailed breakdown shows all transactions from multiple expenses."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as session:
+        session["user_id"] = user_id
+        session["user_email"] = "test@example.com"
+
+    # Create two expenses
+    expense1 = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="Alice",
+        participants="Alice, Bob",
+        split_type="equal",
+        split_details='{"Alice": 15.0, "Bob": 15.0}',
+    )
+    expense2 = Expense(
+        description="Dinner",
+        amount=60.0,
+        payer="Bob",
+        participants="Alice, Bob",
+        split_type="equal",
+        split_details='{"Alice": 30.0, "Bob": 30.0}',
+    )
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    # Act
+    response = client.get("/balance-summary")
+
+    # Assert
+    assert response.status_code == 200
+    # Both expense descriptions should appear in detailed breakdown
+    assert b"Lunch" in response.data
+    assert b"Dinner" in response.data
+    # Toggle buttons should be present
+    assert b"btnSimplifiedView" in response.data
+    assert b"btnDetailedView" in response.data
+

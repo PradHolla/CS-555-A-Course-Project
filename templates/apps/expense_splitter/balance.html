@@ -27,7 +27,25 @@
     }
     .balance-neutral {
         background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-        border-left: 4px solid #6b7280;
+        border-left: 4px solid #9ca3af;
+    }
+    .view-toggle-btn {
+        background: #f3f4f6;
+        color: #6b7280;
+        border: 2px solid transparent;
+    }
+    .view-toggle-btn:hover {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .view-toggle-btn.active {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        border-color: #6366f1;
+        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
+    }
+    .view-container {
+        animation: fadeIn 0.3s ease-out;
     }
 </style>
 {% endblock %}
@@ -139,7 +157,24 @@
     {% endfor %}
 </div>
 
-<!-- Simplified Transactions -->
+<!-- View Toggle Buttons -->
+<div class="flex justify-center gap-4 mb-8">
+    <button id="btnSimplifiedView" onclick="showSimplifiedView()" class="view-toggle-btn active px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        Simplified Pay
+    </button>
+    <button id="btnDetailedView" onclick="showDetailedView()" class="view-toggle-btn px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+        </svg>
+        Detailed Breakdown
+    </button>
+</div>
+
+<!-- Simplified Transactions (Existing) -->
+<div id="simplifiedView" class="view-container">
 {% if transactions %}
 <div class="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
     <div class="flex items-center gap-3 mb-6">
@@ -148,7 +183,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
             </svg>
         </div>
-        <h3 class="text-2xl font-bold text-gray-900">Settlement Transactions</h3>
+        <h3 class="text-2xl font-bold text-gray-900">Simplified Pay</h3>
     </div>
     <p class="text-gray-600 mb-6">Follow these transactions to settle all debts with the minimum number of payments.</p>
     
@@ -200,6 +235,89 @@
     <p class="text-gray-600">Everyone's expenses are balanced. No transactions needed.</p>
 </div>
 {% endif %}
+</div>
+
+<!-- Detailed Breakdown View (New) -->
+<div id="detailedView" class="view-container" style="display: none;">
+{% if detailed_breakdown %}
+<div class="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+            </svg>
+        </div>
+        <h3 class="text-2xl font-bold text-gray-900">Detailed Breakdown</h3>
+    </div>
+    <p class="text-gray-600 mb-6">See all individual debts from each expense. This shows the complete payment network before simplification.</p>
+    
+    <div class="space-y-3">
+        {% for transaction in detailed_breakdown %}
+        <div class="slide-in bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200 hover:shadow-md transition-shadow duration-200">
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-4 flex-1">
+                    <div class="flex items-center gap-2 font-semibold text-gray-900 min-w-[100px]">
+                        <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                        <span class="text-sm">{{ email_to_name.get(transaction.from, transaction.from) }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                        </svg>
+                        <span class="text-lg font-bold text-indigo-600">
+                            ${{ "%.2f"|format(transaction.amount) }}
+                        </span>
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                        </svg>
+                    </div>
+                    <div class="flex items-center gap-2 font-semibold text-gray-900 min-w-[100px]">
+                        <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                        <span class="text-sm">{{ email_to_name.get(transaction.to, transaction.to) }}</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-gray-600 bg-white px-3 py-1 rounded-full border border-gray-200">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                    </svg>
+                    {{ transaction.expense_description }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div class="text-sm text-blue-800">
+                <strong>Total debts:</strong> {{ detailed_breakdown|length }} transaction(s). Switch to "Simplified Pay" to see the optimized payment plan.
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- All settled message -->
+<div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-8 text-center border border-green-200">
+    <div class="flex justify-center mb-4">
+        <div class="p-4 bg-green-100 rounded-full">
+            <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </div>
+    </div>
+    <h3 class="text-xl font-bold text-gray-900 mb-2">All Settled! 🎉</h3>
+    <p class="text-gray-600">Everyone's expenses are balanced. No transactions needed.</p>
+</div>
+{% endif %}
+</div>
+
 {% endif %}
 
 <div class="mt-8 text-center">
@@ -207,4 +325,26 @@
         Add More Expenses
     </a>
 </div>
+
+<script>
+    function showSimplifiedView() {
+        // Hide detailed, show simplified
+        document.getElementById('detailedView').style.display = 'none';
+        document.getElementById('simplifiedView').style.display = 'block';
+        
+        // Update button states
+        document.getElementById('btnSimplifiedView').classList.add('active');
+        document.getElementById('btnDetailedView').classList.remove('active');
+    }
+    
+    function showDetailedView() {
+        // Hide simplified, show detailed
+        document.getElementById('simplifiedView').style.display = 'none';
+        document.getElementById('detailedView').style.display = 'block';
+        
+        // Update button states
+        document.getElementById('btnDetailedView').classList.add('active');
+        document.getElementById('btnSimplifiedView').classList.remove('active');
+    }
+</script>
 {% endblock %}
