@@ -58,6 +58,22 @@
             <h2 class="text-3xl font-bold text-gray-900">{{ group.name }}</h2>
             <p class="text-gray-600">Group expenses and transactions</p>
         </div>
+        <!-- ==== LEAVE GROUP BUTTON ==== -->
+        <div class="ml-auto">
+           <form action="{{ url_for('groups.leave_group', group_id=group.id) }}" method="post"
+          onsubmit="return confirm('Are you sure you want to leave “{{ group.name }}”?');"
+          class="inline">
+        <button type="submit"
+                class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m4 4v1a3 3 0 01-3 3H5a3 3 0 01-3-3v-1m5-7V5a3 3 0 013-3h2a3 3 0 013 3v1"></path>
+            </svg>
+            Leave Group
+        </button>
+        </form>
+        </div>
+        <!-- ==== END LEAVE BUTTON ==== -->
     </div>
 </div>
 

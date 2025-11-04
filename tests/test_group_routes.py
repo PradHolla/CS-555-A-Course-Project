@@ -2938,3 +2938,241 @@ def test_edit_expense_group_not_found_error(client, app):
     # Assert
     assert response.status_code == 200
     assert b"Group not found" in response.data
+
+
+    #==== TEST LEAVE GROUP ====
+def test_leave_group_success(client, app):
+    """Test that a group member can successfully leave a group."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=False)
+    # Assert
+    assert response.status_code == 302
+    assert response.location.endswith("/groups/")
+    updated_group = db.session.get(Group, group.id)
+    assert leaver not in updated_group.members
+    assert creator in updated_group.members  # Creator stays
+    assert len(updated_group.members) == 1
+
+
+def test_leave_group_creator_cannot_leave(client, app):
+    """Test that the group creator cannot leave the group."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    member = User(email="member@example.com")
+    db.session.add_all([creator, member])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, member])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = creator.id
+        sess["user_email"] = creator.email
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+    # Assert
+    assert response.status_code == 200
+    assert b"The group creator cannot leave the group." in response.data
+    updated_group = db.session.get(Group, group.id)
+    assert creator in updated_group.members
+    assert member in updated_group.members
+
+
+def test_leave_group_requires_login(client, app):
+    """Test that unauthenticated users cannot leave a group."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    member = User(email="member@example.com")
+    db.session.add_all([creator, member])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, member])
+    db.session.add(group)
+    db.session.commit()
+    # Act - no login session
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=False)
+    # Assert
+    assert response.status_code == 302
+    assert "/login" in response.location
+    updated_group = db.session.get(Group, group.id)
+    assert member in updated_group.members  # Still in group
+
+
+def test_leave_group_requires_membership(client, app):
+    """Test that non-members cannot leave a group."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    non_member = User(email="nonmember@example.com")
+    db.session.add_all([creator, non_member])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.append(creator)
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = non_member.id
+        sess["user_email"] = non_member.email
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+    # Assert
+    assert response.status_code == 200
+    assert b"You are not a member of this group" in response.data
+    updated_group = db.session.get(Group, group.id)
+    assert non_member not in updated_group.members
+    assert creator in updated_group.members
+
+
+def test_leave_group_not_found(client, app):
+    """Test leaving a non-existent group returns error."""
+    # Arrange
+    from extensions import db
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+    # Act
+    response = client.post("/groups/99999/leave", follow_redirects=True)
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
+
+
+def test_leave_group_redirects_to_groups_list(client, app):
+    """Test that after leaving, user is redirected to /groups/."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=False)
+    # Assert
+    assert response.status_code == 302
+    assert response.location.endswith("/groups/")
+
+
+def test_leave_group_shows_success_message(client, app):
+    """Test that a flash message confirms successful leave."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+    # Assert
+    assert response.status_code == 200
+    assert b"You have left the group" in response.data or b"left the group" in response.data.lower()
+
+
+def test_leave_group_removes_only_leaver(client, app):
+    """Test that only the leaving user is removed from the group."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    other = User(email="other@example.com")
+    db.session.add_all([creator, leaver, other])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver, other])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+    # Act
+    client.post(f"/groups/{group.id}/leave")
+    # Assert
+    updated_group = db.session.get(Group, group.id)
+    assert leaver not in updated_group.members
+    assert creator in updated_group.members
+    assert other in updated_group.members
+    assert len(updated_group.members) == 2
+
+
+def test_leave_group_last_member_except_creator(client, app):
+    """Test that a group with only creator + one member allows leaving."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=False)
+    # Assert
+    assert response.status_code == 302
+    updated_group = db.session.get(Group, group.id)
+    assert leaver not in updated_group.members
+    assert creator in updated_group.members
+    assert len(updated_group.members) == 1  # Only creator remains
+
+
+def test_leave_group_user_not_found_defensive(client, app):
+    """Test defensive handling when user is deleted mid-session."""
+    # Arrange
+    from extensions import db
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+        # Simulate user deletion
+        db.session.delete(leaver)
+        db.session.flush()
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+    # Assert - should redirect to login due to login_required
+    assert response.status_code == 200
+    # Group should still exist, leaver already gone
+    updated_group = db.session.get(Group, group.id)
+    assert creator in updated_group.members
+

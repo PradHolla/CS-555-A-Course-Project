@@ -720,3 +720,42 @@ def mark_notification_read(group_id, notification_id):
         db.session.commit()
 
     return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+@groups_bp.route("/<int:group_id>/leave", methods=["POST"])
+@login_required
+def leave_group(group_id):
+    """Remove the current user from the group."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Load the group
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Must be a member
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Prevent the *creator* from leaving (optional – you can remove this block if you want to allow it)
+    if group.created_by_id == user.id:
+        flash("The group creator cannot leave the group.", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Remove the relationship
+    group.members.remove(user)
+
+    # If the group ends up with **zero** members, delete it (optional)
+    if len(group.members) == 0:
+        db.session.delete(group)
+        flash("You left the group and it was removed (no members left).", "info")
+    else:
+        flash(f"You have left the group “{group.name}”.", "success")
+
+    db.session.commit()
+    return redirect(url_for("groups.list_groups"))
