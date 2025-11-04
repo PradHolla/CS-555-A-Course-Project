@@ -32,10 +32,18 @@ def balance_summary():
 
     # Calculate balances using the service
     balance_data = ExpenseService.calculate_balances(expenses)
+    
+    # Calculate detailed breakdown (all pairwise debts)
+    detailed_breakdown = ExpenseService.calculate_detailed_breakdown(expenses)
 
     # Create mapping of email to display name
     all_emails = set(balance_data["balances"].keys())
     for transaction in balance_data["transactions"]:
+        all_emails.add(transaction["from"])
+        all_emails.add(transaction["to"])
+    
+    # Also include emails from detailed breakdown
+    for transaction in detailed_breakdown:
         all_emails.add(transaction["from"])
         all_emails.add(transaction["to"])
 
@@ -66,6 +74,7 @@ def balance_summary():
         page_id="balance-summary",
         balances=balance_data["balances"],
         transactions=balance_data["transactions"],
+        detailed_breakdown=detailed_breakdown,
         email_to_name=email_to_name,
         groups=groups,
         groups_data=groups_data,
