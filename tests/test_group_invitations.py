@@ -132,9 +132,9 @@ def test_invitation_notification_is_sent(client, app, capsys):
     # Assert
     assert response.status_code == 302
 
-    # Check notification was printed
+    # Check notification was printed (now uses EMAIL NOTIFICATION header)
     captured = capsys.readouterr()
-    assert "GROUP INVITATION" in captured.out
+    assert "EMAIL NOTIFICATION" in captured.out
     assert "newuser@example.com" in captured.out
     assert "Notification Test" in captured.out
 

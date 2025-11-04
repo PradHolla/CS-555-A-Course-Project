@@ -2379,7 +2379,7 @@ def test_edit_expense_sends_notifications(client, app):
 
     # Assert
     assert response.status_code == 302
-    assert "EXPENSE EDIT NOTIFICATION" in printed_output
+    assert "EMAIL NOTIFICATION" in printed_output  # Updated to match new notification format
     assert "Dinner" in printed_output
     assert "$50.00" in printed_output
     assert "To: payer@example.com" in printed_output

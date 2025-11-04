@@ -49,6 +49,11 @@ def request_otp():
 
     db.session.commit()
 
+    # Always print OTP for development/testing
+    print("\n" + "=" * 60)
+    print(f"🔐 OTP for {email}: {otp}")
+    print("=" * 60 + "\n")
+
     # Send OTP email (in development, just print it)
     try:
         msg = Message(
@@ -57,9 +62,10 @@ def request_otp():
             body=f"Your verification code is: {otp}\n\nThis code expires in 10 minutes.",
         )
         mail.send(msg)
-        print(f"OTP for {email}: {otp}")  # For development/testing
+        print(f"✓ OTP email sent to {email}")
     except Exception as e:
-        print(f"Email sending failed: {e}. OTP: {otp}")  # Fallback for development
+        print(f"✗ Email sending failed: {e}")
+        print(f"   But OTP is printed above: {otp}")
 
     return render_template("auth/verify.html", email=email, page_id="verify")
 

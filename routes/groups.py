@@ -282,8 +282,8 @@ def group_expenses(group_id):
         db.session.add(expense)
         db.session.commit()
 
-        # Send email notifications to participants (excluding the payer)
-        participant_list = [email for email in split_details.keys() if email != payer]
+        # Send email notifications to ALL participants (including the payer)
+        participant_list = list(split_details.keys())
         if participant_list:
             try:
                 notify_expense_participants(expense, participant_list)

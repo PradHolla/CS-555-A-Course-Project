@@ -56,10 +56,12 @@ def balance_summary():
         user_map = {}
 
     email_to_name = {}
+    user_emails_to_ids = {}
     for email in all_emails:
         user = user_map.get(email)
         if user:
             email_to_name[email] = user.display_name or user.email
+            user_emails_to_ids[email] = user.id
         else:
             email_to_name[email] = email  # Fallback to email if user not found
 
@@ -76,6 +78,7 @@ def balance_summary():
         transactions=balance_data["transactions"],
         detailed_breakdown=detailed_breakdown,
         email_to_name=email_to_name,
+        user_emails_to_ids=user_emails_to_ids,
         groups=groups,
         groups_data=groups_data,
         selected_group_id=group_id,
