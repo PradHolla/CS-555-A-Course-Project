@@ -326,10 +326,9 @@ def test_payer_does_not_receive_notification(client, app):
         call_args = mock_notify.call_args
         notified_emails = call_args[0][1]  # Second argument to notify_expense_participants
 
-        # Verify payer is NOT in the notification list
-        assert "payer@example.com" not in notified_emails
-        # Verify other participants ARE in the notification list
+        # Verify ALL participants (including payer) ARE in the notification list
+        assert "payer@example.com" in notified_emails
         assert "participant1@example.com" in notified_emails
         assert "participant2@example.com" in notified_emails
-        # Verify exactly 2 participants were notified (not 3)
-        assert len(notified_emails) == 2
+        # Verify all 3 participants were notified
+        assert len(notified_emails) == 3

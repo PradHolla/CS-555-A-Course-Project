@@ -23,14 +23,20 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Email configuration (for development, we'll print to console)
+    # Email configuration
     app.config["MAIL_SERVER"] = "smtp.gmail.com"
     app.config["MAIL_PORT"] = 587
     app.config["MAIL_USE_TLS"] = True
     app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "your-email@gmail.com")
     app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "your-password")
     app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "your-email@gmail.com")
-    app.config["MAIL_SUPPRESS_SEND"] = False  # Enable actual email sending
+    app.config["MAIL_SUPPRESS_SEND"] = False  # Always allow email sending (OTP needs this)
+    
+    # Payment notification email control: Set EMAIL_ENABLED=true in .env to send actual payment emails
+    # When false, payment notifications are logged to terminal instead
+    # Note: OTP emails are always sent regardless of this setting
+    email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
+    app.config["EMAIL_ENABLED"] = email_enabled
 
     # Initialize extensions
     db.init_app(app)
