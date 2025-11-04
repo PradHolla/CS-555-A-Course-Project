@@ -279,3 +279,167 @@ def test_validate_shares_split_zero_shares(app):
     # Assert
     assert not is_valid
     assert "positive" in error_msg.lower()
+
+
+# === Detailed Breakdown Tests ===
+
+
+def test_calculate_detailed_breakdown_with_single_expense(app):
+    """Test detailed breakdown with one expense."""
+    from extensions import db
+    from services.expense_service import ExpenseService
+
+    # Arrange - Alice paid $30 for lunch split equally among Alice, Bob, Charlie
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="alice@test.com",
+        split_type="equal",
+        split_details='{"alice@test.com": 10.0, "bob@test.com": 10.0, "charlie@test.com": 10.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Act
+    breakdown = ExpenseService.calculate_detailed_breakdown([expense])
+
+    # Assert
+    # Bob owes Alice $10, Charlie owes Alice $10 (Alice doesn't owe herself)
+    assert len(breakdown) == 2
+    assert {"from": "bob@test.com", "to": "alice@test.com", "amount": 10.0} in [
+        {k: v for k, v in t.items() if k in ["from", "to", "amount"]} for t in breakdown
+    ]
+    assert {"from": "charlie@test.com", "to": "alice@test.com", "amount": 10.0} in [
+        {k: v for k, v in t.items() if k in ["from", "to", "amount"]} for t in breakdown
+    ]
+    # Check expense description is included
+    assert all(t["expense_description"] == "Lunch" for t in breakdown)
+
+
+def test_calculate_detailed_breakdown_with_multiple_expenses(app):
+    """Test detailed breakdown with multiple expenses."""
+    from extensions import db
+    from services.expense_service import ExpenseService
+
+    # Arrange
+    expense1 = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="alice@test.com",
+        split_type="equal",
+        split_details='{"alice@test.com": 10.0, "bob@test.com": 10.0, "charlie@test.com": 10.0}',
+    )
+    expense2 = Expense(
+        description="Dinner",
+        amount=60.0,
+        payer="bob@test.com",
+        split_type="equal",
+        split_details='{"alice@test.com": 20.0, "bob@test.com": 20.0, "charlie@test.com": 20.0}',
+    )
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    # Act
+    breakdown = ExpenseService.calculate_detailed_breakdown([expense1, expense2])
+
+    # Assert
+    # From expense1: Bob->Alice $10, Charlie->Alice $10
+    # From expense2: Alice->Bob $20, Charlie->Bob $20
+    # Total: 4 debt transactions
+    assert len(breakdown) == 4
+    
+    # Check all transactions exist
+    transactions = [
+        {k: v for k, v in t.items() if k in ["from", "to", "amount", "expense_description"]}
+        for t in breakdown
+    ]
+    assert {
+        "from": "bob@test.com",
+        "to": "alice@test.com",
+        "amount": 10.0,
+        "expense_description": "Lunch",
+    } in transactions
+    assert {
+        "from": "charlie@test.com",
+        "to": "alice@test.com",
+        "amount": 10.0,
+        "expense_description": "Lunch",
+    } in transactions
+    assert {
+        "from": "alice@test.com",
+        "to": "bob@test.com",
+        "amount": 20.0,
+        "expense_description": "Dinner",
+    } in transactions
+    assert {
+        "from": "charlie@test.com",
+        "to": "bob@test.com",
+        "amount": 20.0,
+        "expense_description": "Dinner",
+    } in transactions
+
+
+def test_calculate_detailed_breakdown_with_empty_expenses(app):
+    """Test detailed breakdown returns empty list for no expenses."""
+    from services.expense_service import ExpenseService
+
+    # Act
+    breakdown = ExpenseService.calculate_detailed_breakdown([])
+
+    # Assert
+    assert breakdown == []
+
+
+def test_calculate_detailed_breakdown_excludes_payer(app):
+    """Test that payer is not included in their own debt list."""
+    from extensions import db
+    from services.expense_service import ExpenseService
+
+    # Arrange
+    expense = Expense(
+        description="Coffee",
+        amount=15.0,
+        payer="alice@test.com",
+        split_type="equal",
+        split_details='{"alice@test.com": 5.0, "bob@test.com": 5.0, "charlie@test.com": 5.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Act
+    breakdown = ExpenseService.calculate_detailed_breakdown([expense])
+
+    # Assert
+    # Only Bob and Charlie owe Alice (Alice doesn't owe herself)
+    assert len(breakdown) == 2
+    assert not any(t["from"] == "alice@test.com" and t["to"] == "alice@test.com" for t in breakdown)
+
+
+def test_calculate_detailed_breakdown_with_percentage_split(app):
+    """Test detailed breakdown with percentage-based split."""
+    from extensions import db
+    from services.expense_service import ExpenseService
+
+    # Arrange - Alice paid $100, split 60% Bob, 40% Charlie
+    expense = Expense(
+        description="Groceries",
+        amount=100.0,
+        payer="alice@test.com",
+        split_type="percentage",
+        split_details='{"bob@test.com": 60.0, "charlie@test.com": 40.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Act
+    breakdown = ExpenseService.calculate_detailed_breakdown([expense])
+
+    # Assert
+    assert len(breakdown) == 2
+    assert {"from": "bob@test.com", "to": "alice@test.com", "amount": 60.0} in [
+        {k: v for k, v in t.items() if k in ["from", "to", "amount"]} for t in breakdown
+    ]
+    assert {"from": "charlie@test.com", "to": "alice@test.com", "amount": 40.0} in [
+        {k: v for k, v in t.items() if k in ["from", "to", "amount"]} for t in breakdown
+    ]
+

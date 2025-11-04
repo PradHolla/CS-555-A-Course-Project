@@ -62,6 +62,55 @@ class ExpenseService:
         return {"balances": balances, "transactions": transactions}
 
     @staticmethod
+    def calculate_detailed_breakdown(expenses):
+        """
+        Calculate detailed breakdown showing ALL pairwise debts from each expense.
+        
+        Unlike calculate_balances() which simplifies debts, this shows the actual
+        debts created by each expense (who owes the payer for their share).
+        
+        Args:
+            expenses: List of Expense model objects
+            
+        Returns:
+            List of detailed debt transactions in format:
+            [{
+                'from': person_who_owes,
+                'to': person_who_paid,
+                'amount': amount_owed,
+                'expense_description': 'Lunch',
+                'expense_id': 123
+            }, ...]
+        """
+        if not expenses:
+            return []
+        
+        detailed_transactions = []
+        
+        for expense in expenses:
+            payer = expense.payer
+            split_details = ExpenseService._parse_split_details(expense)
+            
+            if not split_details:
+                continue
+            
+            # For each participant (excluding payer), create a debt record
+            for participant, amount in split_details.items():
+                if participant != payer and amount > 0.01:  # Skip payer and zero amounts
+                    detailed_transactions.append({
+                        'from': participant,
+                        'to': payer,
+                        'amount': round(amount, 2),
+                        'expense_description': expense.description,
+                        'expense_id': expense.id
+                    })
+        
+        # Sort by amount (largest first) for better readability
+        detailed_transactions.sort(key=lambda x: x['amount'], reverse=True)
+        
+        return detailed_transactions
+
+    @staticmethod
     def _simplify_debts(balances):
         """
         Simplify debts into minimal transactions.
