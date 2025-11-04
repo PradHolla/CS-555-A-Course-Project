@@ -53,11 +53,13 @@ def create_app():
     app.register_blueprint(expenses_bp)
     app.register_blueprint(settlements_bp)
 
+    from routes.dashboard import dashboard_bp
     from routes.groups import groups_bp
     from routes.profile import profile_bp
 
     app.register_blueprint(groups_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(dashboard_bp)
 
     return app
 

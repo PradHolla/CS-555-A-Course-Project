@@ -1,5 +1,8 @@
 """Authentication routes blueprint."""
 
+import logging
+import sys
+
 from flask import Blueprint, redirect, render_template, request, session, url_for
 from flask_mail import Message
 
@@ -9,6 +12,10 @@ from services.auth_service import AuthService
 from utils.validators import is_valid_email
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+# Configure logger for OTP output
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @auth_bp.route("/login")
@@ -49,12 +56,41 @@ def request_otp():
 
     db.session.commit()
 
-    # Always print OTP for development/testing
-    print("\n" + "=" * 60)
-    print(f"🔐 OTP for {email}: {otp}")
-    print("=" * 60 + "\n")
+    # Log OTP to terminal and file with enhanced visibility
+    otp_message = (
+        f"\n\n"
+        f"{'=' * 70}\n"
+        f"{'=' * 70}\n"
+        f"🔐 OTP REQUESTED\n"
+        f"{'=' * 70}\n"
+        f"   Email: {email}\n"
+        f"   OTP Code: {otp}\n"
+        f"   Valid for: 10 minutes\n"
+        f"{'=' * 70}\n"
+        f"{'=' * 70}\n\n"
+    )
+    
+    # Print to terminal with multiple methods for maximum visibility
+    print(otp_message, flush=True)
+    sys.stdout.flush()
+    
+    # Also write to stderr for guaranteed visibility
+    sys.stderr.write(otp_message)
+    sys.stderr.flush()
+    
+    # Print a simple version for easy copying
+    print(f">>> COPY THIS OTP: {otp} <<<\n", flush=True)
+    
+    # Write to file as backup
+    try:
+        from datetime import datetime
+        with open("otp_log.txt", "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now()} - Email: {email}, OTP: {otp}\n")
+            f.flush()
+    except Exception as log_error:
+        logger.error(f"Failed to write OTP to file: {log_error}")
 
-    # Send OTP email (in development, just print it)
+    # Send OTP email
     try:
         msg = Message(
             subject="Your Login Code - Expense Splitter",
@@ -62,10 +98,9 @@ def request_otp():
             body=f"Your verification code is: {otp}\n\nThis code expires in 10 minutes.",
         )
         mail.send(msg)
-        print(f"✓ OTP email sent to {email}")
+        logger.info(f"OTP email sent successfully to {email}")
     except Exception as e:
-        print(f"✗ Email sending failed: {e}")
-        print(f"   But OTP is printed above: {otp}")
+        logger.error(f"Email sending failed for {email}: {e}")
 
     return render_template("auth/verify.html", email=email, page_id="verify")
 
