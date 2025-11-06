@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from extensions import db
 
@@ -61,6 +61,8 @@ class Expense(db.Model):
         db.String(20), nullable=False, default="equal"
     )  # 'equal', 'custom', 'percentage', or 'shares'
     split_details = db.Column(db.Text)  # JSON string: {"member": amount/percentage/shares}
+    category = db.Column(db.String(50), nullable=True)  # Expense category
+    expense_date = db.Column(db.Date, default=lambda: date.today())  # Date when expense occurred
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship

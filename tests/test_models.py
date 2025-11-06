@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -153,6 +153,100 @@ def test_expense_requires_description(app):
         db.session.commit()
 
     db.session.rollback()
+
+
+def test_expense_with_category(app):
+    """Test that Expense model can store category."""
+    # Arrange
+    expense = Expense(
+        description="Lunch", amount=15.50, payer="Sam", participants="Sam, Alex", category="Food"
+    )
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.category == "Food"
+
+
+def test_expense_category_can_be_none(app):
+    """Test that Expense category can be None (optional field)."""
+    # Arrange
+    expense = Expense(description="Lunch", amount=15.50, payer="Sam", participants="Sam, Alex")
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.category is None
+
+
+def test_expense_with_expense_date(app):
+    """Test that Expense model can store expense_date."""
+    # Arrange
+    test_date = date(2024, 1, 15)
+    expense = Expense(
+        description="Lunch",
+        amount=15.50,
+        payer="Sam",
+        participants="Sam, Alex",
+        expense_date=test_date,
+    )
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.expense_date == test_date
+
+
+def test_expense_date_defaults_to_today(app):
+    """Test that Expense expense_date defaults to today's date."""
+    # Arrange
+    expense = Expense(description="Lunch", amount=15.50, payer="Sam", participants="Sam, Alex")
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.expense_date is not None
+    assert stored.expense_date == date.today()
+
+
+def test_expense_with_category_and_expense_date(app):
+    """Test that Expense model can store both category and expense_date."""
+    # Arrange
+    test_date = date(2024, 3, 20)
+    expense = Expense(
+        description="Groceries",
+        amount=75.00,
+        payer="Alice",
+        participants="Alice, Bob",
+        category="Groceries",
+        expense_date=test_date,
+    )
+
+    # Act
+    db.session.add(expense)
+    db.session.commit()
+
+    # Assert
+    stored = Expense.query.first()
+    assert stored is not None
+    assert stored.category == "Groceries"
+    assert stored.expense_date == test_date
 
 
 # === Group Model Tests ===

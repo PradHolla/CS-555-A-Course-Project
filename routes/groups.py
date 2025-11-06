@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
@@ -149,6 +150,7 @@ def group_expenses(group_id):
         amount_raw = request.form.get("amount", "").strip()
         payer = request.form.get("payer", "").strip()
         split_type = request.form.get("split_type", "equal").strip()
+        category = request.form.get("category", "").strip() or None
 
         # Validate required fields
         if not description:
@@ -278,6 +280,8 @@ def group_expenses(group_id):
             split_type=split_type,
             split_details=json.dumps(split_details),
             participants=", ".join(split_details.keys()),  # Keep for backward compatibility
+            category=category,
+            expense_date=date.today(),  # Automatically set to today's date
         )
         db.session.add(expense)
         db.session.commit()
@@ -520,6 +524,7 @@ def edit_expense(group_id, expense_id):
     amount_raw = request.form.get("amount", "").strip()
     payer = request.form.get("payer", "").strip()
     split_type = request.form.get("split_type", "equal").strip()
+    category = request.form.get("category", "").strip() or None
 
     # Validate required fields
     if not description:
@@ -664,6 +669,7 @@ def edit_expense(group_id, expense_id):
     expense.split_type = split_type
     expense.split_details = json.dumps(split_details)
     expense.participants = ", ".join(split_details.keys())  # Keep for backward compatibility
+    expense.category = category  # Update category (expense_date remains unchanged)
     db.session.commit()
 
     # Send notifications to other group members (excluding the editor)
