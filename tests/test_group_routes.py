@@ -2126,6 +2126,337 @@ def test_edit_expense_invalid_split_sum(client, app):
     assert expense.amount == 30.0  # Should not be changed
 
 
+def test_create_expense_with_category(client, app):
+    """Test creating expense with category."""
+    # Arrange
+    from datetime import date
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    participant = User(email="participant@example.com")
+    db.session.add_all([payer, participant])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, participant])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    expense_data = MultiDict(
+        [
+            ("description", "Lunch"),
+            ("amount", "30.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "participant@example.com"),
+            ("category", "Food"),
+        ]
+    )
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+    expense = Expense.query.filter_by(description="Lunch", group_id=group.id).first()
+    assert expense is not None
+    assert expense.category == "Food"
+    assert expense.expense_date == date.today()
+
+
+def test_create_expense_without_category(client, app):
+    """Test creating expense without category (optional field)."""
+    # Arrange
+    from datetime import date
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    participant = User(email="participant@example.com")
+    db.session.add_all([payer, participant])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, participant])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    expense_data = MultiDict(
+        [
+            ("description", "Lunch"),
+            ("amount", "30.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "participant@example.com"),
+        ]
+    )
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+    expense = Expense.query.filter_by(description="Lunch", group_id=group.id).first()
+    assert expense is not None
+    assert expense.category is None
+    assert expense.expense_date == date.today()
+
+
+def test_create_expense_expense_date_auto_set(client, app):
+    """Test that expense_date is automatically set to today when creating expense."""
+    # Arrange
+    from datetime import date
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    participant = User(email="participant@example.com")
+    db.session.add_all([payer, participant])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, participant])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = payer.id
+        sess["user_email"] = payer.email
+
+    expense_data = MultiDict(
+        [
+            ("description", "Lunch"),
+            ("amount", "30.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "participant@example.com"),
+            ("category", "Food"),
+        ]
+    )
+
+    # Act
+    response = client.post(f"/groups/{group.id}", data=expense_data, follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302
+    expense = Expense.query.filter_by(description="Lunch", group_id=group.id).first()
+    assert expense is not None
+    # expense_date should be automatically set to today
+    assert expense.expense_date == date.today()
+
+
+def test_edit_expense_with_category(client, app):
+    """Test editing expense to add/update category."""
+    # Arrange
+    from datetime import date
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create expense without category
+    original_date = date(2024, 1, 15)
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+        expense_date=original_date,
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - edit expense to add category
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+            ("category", "Food"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense is not None
+    assert updated_expense.category == "Food"
+    # expense_date should remain unchanged
+    assert updated_expense.expense_date == original_date
+
+
+def test_edit_expense_change_category(client, app):
+    """Test editing expense to change category."""
+    # Arrange
+    from datetime import date
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create expense with category
+    original_date = date(2024, 1, 15)
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+        category="Food",
+        expense_date=original_date,
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - edit expense to change category
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+            ("category", "Entertainment"),
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense is not None
+    assert updated_expense.category == "Entertainment"
+    # expense_date should remain unchanged
+    assert updated_expense.expense_date == original_date
+
+
+def test_edit_expense_clear_category(client, app):
+    """Test editing expense to clear category (set to None)."""
+    # Arrange
+    from datetime import date
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create expense with category
+    original_date = date(2024, 1, 15)
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+        category="Food",
+        expense_date=original_date,
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - edit expense without category field (should clear it)
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "editor@example.com"),
+            ("split_type", "equal"),
+            ("participants", "payer@example.com"),
+            ("participants", "editor@example.com"),
+            # No category field - should clear it
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 302
+    updated_expense = db.session.get(Expense, expense_id)
+    assert updated_expense is not None
+    assert updated_expense.category is None
+    # expense_date should remain unchanged
+    assert updated_expense.expense_date == original_date
+
+
 def test_edit_expense_updates_database(client, app):
     """Test that editing expense updates the database correctly."""
     # Arrange
