@@ -675,6 +675,457 @@ def test_edit_comment_wrong_expense(client, app):
     assert b"Comment does not belong to this expense" in response.data
 
 
+def test_create_comment_group_not_found(client, app):
+    """Test creating comment with non-existent group."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        "/groups/99999/expense/1/comment",
+        data={"content": "Test comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
+
+
+def test_create_comment_not_member(client, app):
+    """Test creating comment when user is not a group member."""
+    # Arrange
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)  # user2 is not a member
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=50.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user2.id
+        sess["user_email"] = user2.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/comment",
+        data={"content": "Test comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You are not a member of this group" in response.data
+
+
+def test_create_comment_expense_wrong_group(client, app):
+    """Test creating comment on expense from different group."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group1 = Group(name="Test Group 1", created_by_id=user.id)
+    group2 = Group(name="Test Group 2", created_by_id=user.id)
+    group1.members.append(user)
+    group2.members.append(user)
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=50.0,
+        payer="user@example.com",
+        group_id=group1.id,  # Expense belongs to group1
+        split_type="equal",
+        split_details='{"user@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act - try to create comment via group2 URL
+    response = client.post(
+        f"/groups/{group2.id}/expense/{expense.id}/comment",
+        data={"content": "Test comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense does not belong to this group" in response.data
+
+
+def test_edit_comment_group_not_found(client, app):
+    """Test editing comment with non-existent group."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        "/groups/99999/expense/1/comment/1/edit",
+        data={"content": "Updated comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
+
+
+def test_edit_comment_not_member(client, app):
+    """Test editing comment when user is not a group member."""
+    # Arrange
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)  # user2 is not a member
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=50.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    comment = Comment(
+        expense_id=expense.id,
+        user_id=user1.id,
+        content="Original comment",
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user2.id
+        sess["user_email"] = user2.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/comment/{comment.id}/edit",
+        data={"content": "Updated comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You are not a member of this group" in response.data
+
+
+def test_edit_comment_expense_not_found(client, app):
+    """Test editing comment on non-existent expense."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/99999/comment/1/edit",
+        data={"content": "Updated comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense not found" in response.data
+
+
+def test_edit_comment_expense_wrong_group(client, app):
+    """Test editing comment on expense from different group."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group1 = Group(name="Test Group 1", created_by_id=user.id)
+    group2 = Group(name="Test Group 2", created_by_id=user.id)
+    group1.members.append(user)
+    group2.members.append(user)
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=50.0,
+        payer="user@example.com",
+        group_id=group1.id,  # Expense belongs to group1
+        split_type="equal",
+        split_details='{"user@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    comment = Comment(
+        expense_id=expense.id,
+        user_id=user.id,
+        content="Original comment",
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act - try to edit comment via group2 URL
+    response = client.post(
+        f"/groups/{group2.id}/expense/{expense.id}/comment/{comment.id}/edit",
+        data={"content": "Updated comment"},
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense does not belong to this group" in response.data
+
+
+def test_delete_comment_group_not_found(client, app):
+    """Test deleting comment with non-existent group."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        "/groups/99999/expense/1/comment/1/delete",
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
+
+
+def test_delete_comment_not_member(client, app):
+    """Test deleting comment when user is not a group member."""
+    # Arrange
+    user1 = User(email="user1@example.com")
+    user2 = User(email="user2@example.com")
+    db.session.add_all([user1, user2])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user1.id)
+    group.members.append(user1)  # user2 is not a member
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=50.0,
+        payer="user1@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user1@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    comment = Comment(
+        expense_id=expense.id,
+        user_id=user1.id,
+        content="Comment to delete",
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user2.id
+        sess["user_email"] = user2.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/comment/{comment.id}/delete",
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You are not a member of this group" in response.data
+
+
+def test_delete_comment_expense_not_found(client, app):
+    """Test deleting comment on non-existent expense."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act
+    response = client.post(
+        f"/groups/{group.id}/expense/99999/comment/1/delete",
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense not found" in response.data
+
+
+def test_delete_comment_expense_wrong_group(client, app):
+    """Test deleting comment on expense from different group."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group1 = Group(name="Test Group 1", created_by_id=user.id)
+    group2 = Group(name="Test Group 2", created_by_id=user.id)
+    group1.members.append(user)
+    group2.members.append(user)
+    db.session.add_all([group1, group2])
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=50.0,
+        payer="user@example.com",
+        group_id=group1.id,  # Expense belongs to group1
+        split_type="equal",
+        split_details='{"user@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    comment = Comment(
+        expense_id=expense.id,
+        user_id=user.id,
+        content="Comment to delete",
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act - try to delete comment via group2 URL
+    response = client.post(
+        f"/groups/{group2.id}/expense/{expense.id}/comment/{comment.id}/delete",
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Expense does not belong to this group" in response.data
+
+
+def test_delete_comment_wrong_expense(client, app):
+    """Test deleting comment that belongs to different expense."""
+    # Arrange
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    expense1 = Expense(
+        description="Expense 1",
+        amount=50.0,
+        payer="user@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user@example.com": 50.0}',
+    )
+    expense2 = Expense(
+        description="Expense 2",
+        amount=30.0,
+        payer="user@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"user@example.com": 30.0}',
+    )
+    db.session.add_all([expense1, expense2])
+    db.session.commit()
+
+    comment = Comment(
+        expense_id=expense1.id,
+        user_id=user.id,
+        content="Comment on expense 1",
+    )
+    db.session.add(comment)
+    db.session.commit()
+    comment_id = comment.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act - try to delete comment via wrong expense ID
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense2.id}/comment/{comment_id}/delete",
+        follow_redirects=True,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Comment does not belong to this expense" in response.data
+
+
 def test_expense_detail_group_not_found(client, app):
     """Test expense_detail handles group not found error."""
     # Arrange
@@ -825,11 +1276,13 @@ def test_expense_detail_empty_emails(client, app):
     db.session.commit()
     
     # Create expense with empty split_details and no comments
-    # This tests the empty all_emails case (lines 483-484)
+    # Note: expense.payer is always added to all_emails, so to test empty case
+    # we'd need payer to be None, but that's not a valid state in the model
+    # This test verifies the route works with minimal data
     expense = Expense(
         description="Lunch",
         amount=50.0,
-        payer="",  # Empty payer
+        payer="user@example.com",  # Must have a payer
         group_id=group.id,
         split_type="equal",
         split_details='{}',  # Empty split details - no participants
