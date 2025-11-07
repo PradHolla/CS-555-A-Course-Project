@@ -3226,6 +3226,230 @@ def test_edit_expense_user_not_found_error(client, app):
     assert response.status_code == 200
 
 
+def test_edit_expense_invalid_percentage_format(client, app):
+    """Test that editing expense with invalid percentage format fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with invalid percentage (non-numeric)
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "percentage"),
+            ("percentage_payer@example.com", "not_a_number"),  # Invalid percentage
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Invalid percentage" in response.data
+    expense = db.session.get(Expense, expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_invalid_shares_format(client, app):
+    """Test that editing expense with invalid shares format fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with invalid shares (non-numeric)
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "shares"),
+            ("shares_payer@example.com", "not_a_number"),  # Invalid shares
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Invalid shares" in response.data
+    expense = db.session.get(Expense, expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_no_percentages_specified(client, app):
+    """Test that editing expense with percentage split but no percentages fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with percentage split but no percentage values
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "percentage"),
+            # No percentage_* fields provided
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Please specify percentages for at least one participant" in response.data
+    expense = db.session.get(Expense, expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
+def test_edit_expense_no_shares_specified(client, app):
+    """Test that editing expense with shares split but no shares fails."""
+    # Arrange
+    from werkzeug.datastructures import MultiDict
+
+    from extensions import db
+    from models import Expense
+
+    payer = User(email="payer@example.com")
+    editor = User(email="editor@example.com")
+    db.session.add_all([payer, editor])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=payer.id)
+    group.members.extend([payer, editor])
+    db.session.add(group)
+    db.session.commit()
+
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="payer@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"payer@example.com": 15.0, "editor@example.com": 15.0}',
+        participants="payer@example.com, editor@example.com",
+    )
+    db.session.add(expense)
+    db.session.commit()
+    expense_id = expense.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = editor.id
+        sess["user_email"] = editor.email
+
+    # Act - try to edit with shares split but no share values
+    expense_data = MultiDict(
+        [
+            ("description", "Dinner"),
+            ("amount", "50.00"),
+            ("payer", "payer@example.com"),
+            ("split_type", "shares"),
+            # No shares_* fields provided
+        ]
+    )
+    response = client.post(
+        f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Please specify shares for at least one participant" in response.data
+    expense = db.session.get(Expense, expense_id)
+    assert expense.description == "Lunch"  # Should not be changed
+
+
 def test_edit_expense_group_not_found_error(client, app):
     """Test edit expense handles group not found error."""
     # Arrange

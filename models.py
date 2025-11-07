@@ -44,6 +44,9 @@ class User(db.Model):
 
         return True
 
+    # Relationship
+    comments = db.relationship("Comment", backref="user", lazy="dynamic")
+
     def __repr__(self):
         return f"<User {self.email}>"
 
@@ -67,6 +70,7 @@ class Expense(db.Model):
 
     # Relationship
     group = db.relationship("Group", backref="expenses")
+    comments = db.relationship("Comment", backref="expense", lazy="dynamic", cascade="all, delete-orphan")
 
 
 class Settlement(db.Model):
@@ -143,3 +147,16 @@ class GroupNotification(db.Model):
 
     def __repr__(self):
         return f"<GroupNotification {self.notification_type} for group {self.group_id}>"
+
+
+class Comment(db.Model):
+    """Model for comments on expenses."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    expense_id = db.Column(db.Integer, db.ForeignKey("expense.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<Comment {self.id} on expense {self.expense_id}>"
