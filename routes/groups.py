@@ -4,7 +4,7 @@ from datetime import date
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from extensions import db
-from models import Expense, Group, GroupInvitation, User
+from models import Comment, Expense, Group, GroupInvitation, User
 from services.expense_service import ExpenseService
 from services.notification_service import (
     notify_expense_deletion,
@@ -301,6 +301,20 @@ def group_expenses(group_id):
     # GET request - show expenses for this group
     expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.created_at.desc()).all()
 
+    # Get all expense IDs for bulk comment count query
+    expense_ids = [expense.id for expense in expenses]
+    
+    # Bulk fetch comment counts for all expenses to avoid N+1 queries
+    from sqlalchemy import func
+    comment_counts = {}
+    if expense_ids:
+        comment_count_results = db.session.query(
+            Comment.expense_id,
+            func.count(Comment.id).label('count')
+        ).filter(Comment.expense_id.in_(expense_ids)).group_by(Comment.expense_id).all()
+        
+        comment_counts = {expense_id: count for expense_id, count in comment_count_results}
+
     # Process expenses for display
     expense_views = []
     all_emails = set()
@@ -312,12 +326,14 @@ def group_expenses(group_id):
             if len(split_details) == 1 and expense.split_type == "equal"
             else None
         )
+        comment_count = comment_counts.get(expense.id, 0)
         expense_views.append(
             {
                 "model": expense,
                 "participants": participants,
                 "share": share,
                 "split_details": split_details,
+                "comment_count": comment_count,
             }
         )
         # Collect all emails for display name lookup
@@ -408,6 +424,82 @@ def group_expenses(group_id):
         deletion_info=deletion_info,
         edit_info=edit_info,
         transaction_count=transaction_count,
+    )
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>")
+@login_required
+def expense_detail(group_id, expense_id):
+    """Display expense detail page with comments."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Fetch comments ordered by created_at (chronological)
+    comments = Comment.query.filter_by(expense_id=expense_id).order_by(Comment.created_at.asc()).all()
+
+    # Process expense for display
+    split_details = ExpenseService._parse_split_details(expense)
+    participants = list(split_details.keys())
+
+    # Collect all emails for display name lookup
+    all_emails = set()
+    all_emails.add(expense.payer)
+    all_emails.update(participants)
+    # Add comment authors
+    for comment in comments:
+        comment_user = db.session.get(User, comment.user_id)
+        if comment_user:
+            all_emails.add(comment_user.email)
+
+    # Bulk fetch all users for the emails to avoid N+1 queries
+    if all_emails:
+        users = User.query.filter(User.email.in_(all_emails)).all()
+        user_map = {user.email: user for user in users}
+    else:
+        users = []
+        user_map = {}
+
+    email_to_name = {}
+    for email in all_emails:
+        user_obj = user_map.get(email)
+        if user_obj:
+            email_to_name[email] = user_obj.display_name or user_obj.email
+        else:
+            email_to_name[email] = email  # Fallback to email if user not found
+
+    return render_template(
+        "groups/expense_detail.html",
+        group=group,
+        expense=expense,
+        split_details=split_details,
+        participants=participants,
+        comments=comments,
+        email_to_name=email_to_name,
+        current_user_id=user_id,
     )
 
 
@@ -529,21 +621,21 @@ def edit_expense(group_id, expense_id):
     # Validate required fields
     if not description:
         flash("Description is required", "error")
-        return redirect(url_for("groups.group_expenses", group_id=group_id))
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
     if not payer:
         flash("Payer is required", "error")
-        return redirect(url_for("groups.group_expenses", group_id=group_id))
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
     # Validate amount (must be > 0)
     try:
         amount = float(amount_raw)
         if amount <= 0:
             flash("Amount must be greater than zero", "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
     except (ValueError, TypeError):
         flash("Please enter a valid amount", "error")
-        return redirect(url_for("groups.group_expenses", group_id=group_id))
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
     # Get group member emails for validation
     group_member_emails = [member.email for member in group.members]
@@ -551,7 +643,7 @@ def edit_expense(group_id, expense_id):
     # Validate payer is in group
     if payer not in group_member_emails:
         flash("Payer must be a member of the group", "error")
-        return redirect(url_for("groups.group_expenses", group_id=group_id))
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
     # Handle participants and split details
     if split_type == "equal":
@@ -559,13 +651,13 @@ def edit_expense(group_id, expense_id):
         selected_participants = request.form.getlist("participants")
         if not selected_participants:
             flash("Please select at least one participant", "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Validate all participants are in group
         for participant in selected_participants:
             if participant not in group_member_emails:
                 flash(f"Participant '{participant}' is not in the group", "error")
-                return redirect(url_for("groups.group_expenses", group_id=group_id))
+                return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Calculate equal split
         split_details = ExpenseService.calculate_equal_split(selected_participants, amount)
@@ -581,17 +673,17 @@ def edit_expense(group_id, expense_id):
                     split_details[member_email] = float(percentage_value)
                 except ValueError:
                     flash(f"Invalid percentage for {member_email}", "error")
-                    return redirect(url_for("groups.group_expenses", group_id=group_id))
+                    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         if not split_details:
             flash("Please specify percentages for at least one participant", "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Validate percentage split
         is_valid, error_msg = ExpenseService.validate_percentage_split(split_details)
         if not is_valid:
             flash(error_msg, "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Calculate amounts from percentages
         split_details = ExpenseService.calculate_percentage_split(split_details, amount)
@@ -607,17 +699,17 @@ def edit_expense(group_id, expense_id):
                     split_details[member_email] = float(shares_value)
                 except ValueError:
                     flash(f"Invalid shares for {member_email}", "error")
-                    return redirect(url_for("groups.group_expenses", group_id=group_id))
+                    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         if not split_details:
             flash("Please specify shares for at least one participant", "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Validate shares split
         is_valid, error_msg = ExpenseService.validate_shares_split(split_details)
         if not is_valid:
             flash(error_msg, "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Calculate amounts from shares
         split_details = ExpenseService.calculate_shares_split(split_details, amount)
@@ -633,17 +725,17 @@ def edit_expense(group_id, expense_id):
                     split_details[member_email] = float(custom_amount)
                 except ValueError:
                     flash(f"Invalid amount for {member_email}", "error")
-                    return redirect(url_for("groups.group_expenses", group_id=group_id))
+                    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         if not split_details:
             flash("Please specify amounts for at least one participant", "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
         # Validate custom split
         is_valid, error_msg = ExpenseService.validate_custom_split(split_details, amount)
         if not is_valid:
             flash(error_msg, "error")
-            return redirect(url_for("groups.group_expenses", group_id=group_id))
+            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
 
     # Store old expense values for notification (before update)
@@ -694,7 +786,173 @@ def edit_expense(group_id, expense_id):
     db.session.commit()
 
     flash("Expense updated successfully!", "success")
-    return redirect(url_for("groups.group_expenses", group_id=group_id))
+    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/comment", methods=["POST"])
+@login_required
+def create_comment(group_id, expense_id):
+    """Create a comment on an expense."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Get comment content
+    content = request.form.get("content", "").strip()
+
+    # Validate comment content
+    if not content:
+        flash("Comment cannot be empty", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    # Create comment
+    comment = Comment(
+        expense_id=expense_id,
+        user_id=user_id,
+        content=content,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    flash("Comment posted successfully!", "success")
+    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/comment/<int:comment_id>/edit", methods=["POST"])
+@login_required
+def edit_comment(group_id, expense_id, comment_id):
+    """Edit a comment on an expense."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Get the comment and verify it belongs to the expense and user
+    comment = db.session.get(Comment, comment_id)
+    if not comment:
+        flash("Comment not found", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    if comment.expense_id != expense_id:
+        flash("Comment does not belong to this expense", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    if comment.user_id != user_id:
+        flash("You can only edit your own comments", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    # Get updated comment content
+    content = request.form.get("content", "").strip()
+
+    # Validate comment content
+    if not content:
+        flash("Comment cannot be empty", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    # Update comment
+    comment.content = content
+    db.session.commit()
+
+    flash("Comment updated successfully!", "success")
+    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/comment/<int:comment_id>/delete", methods=["POST"])
+@login_required
+def delete_comment(group_id, expense_id, comment_id):
+    """Delete a comment on an expense."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Get the comment and verify it belongs to the expense and user
+    comment = db.session.get(Comment, comment_id)
+    if not comment:
+        flash("Comment not found", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    if comment.expense_id != expense_id:
+        flash("Comment does not belong to this expense", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    if comment.user_id != user_id:
+        flash("You can only delete your own comments", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    # Delete comment
+    db.session.delete(comment)
+    db.session.commit()
+
+    flash("Comment deleted successfully!", "success")
+    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
 
 @groups_bp.route("/<int:group_id>/notification/<int:notification_id>/read", methods=["POST"])

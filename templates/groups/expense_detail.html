@@ -1,0 +1,708 @@
+{% extends "base.html" %}
+
+{% block title %}{{ expense.description }} • {{ group.name }} • TeamSync{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center gap-4 mb-4">
+        <a href="{{ url_for('groups.group_expenses', group_id=group.id) }}" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+        </a>
+        <div class="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl text-white">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+        </div>
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900">Expense Details</h2>
+            <p class="text-gray-600">{{ group.name }}</p>
+        </div>
+    </div>
+</div>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="mb-6">
+            {% for category, message in messages %}
+                <div class="p-4 rounded-lg {% if category == 'error' %}bg-red-100 text-red-700 border border-red-200{% elif category == 'success' %}bg-green-100 text-green-700 border border-green-200{% else %}bg-blue-100 text-blue-700 border border-blue-200{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<!-- Expense Details Card -->
+<div class="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+    <!-- Header with amount and badge -->
+    <div class="flex items-start justify-between mb-4">
+        <div class="flex-1">
+            <div class="flex items-center gap-3 mb-2">
+                <h4 class="text-2xl font-bold text-gray-900">{{ expense.description }}</h4>
+                {% if expense.category %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
+                    {% if expense.category == 'Food' %}🍔
+                    {% elif expense.category == 'Utilities' %}⚡
+                    {% elif expense.category == 'Transport' %}🚗
+                    {% elif expense.category == 'Entertainment' %}🎬
+                    {% elif expense.category == 'Groceries' %}🛒
+                    {% elif expense.category == 'Rent' %}🏠
+                    {% elif expense.category == 'Travel' %}✈️
+                    {% else %}📋
+                    {% endif %}
+                    {{ expense.category }}
+                </span>
+                {% endif %}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                    Paid by: {{ email_to_name.get(expense.payer, expense.payer) }}
+                </span>
+                <span class="text-xs text-gray-500">
+                    {% if expense.expense_date %}
+                        {{ expense.expense_date.strftime('%b %d, %Y') }}
+                    {% else %}
+                        {{ expense.created_at.strftime('%b %d, %Y') }}
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        <div class="text-right ml-4">
+            <div class="text-4xl font-bold text-emerald-600 mb-1">
+                ${{ '%.2f' % expense.amount }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Participants and Split Details -->
+    {% if participants %}
+        <div class="border-t border-gray-100 pt-4 mt-4">
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-wrap gap-2">
+                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Participants:</span>
+                    {% for p in participants %}
+                        <span class="inline-flex items-center px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                            @{{ email_to_name.get(p, p) }}
+                        </span>
+                    {% endfor %}
+                </div>
+                {% if split_details %}
+                    <div class="grid grid-cols-2 gap-2 mt-1">
+                        {% for participant, amount in split_details.items() %}
+                            <div class="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                                <span class="text-sm text-gray-700">{{ email_to_name.get(participant, participant) }}</span>
+                                <span class="text-sm font-semibold text-gray-900">${{ '%.2f' % amount }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="border-t border-gray-100 pt-4 mt-4">
+            <span class="text-xs text-gray-400 italic">No split defined</span>
+        </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div id="expense-view-{{ expense.id }}" class="expense-view-section">
+        <div class="flex items-center gap-2 mt-5 pt-4 border-t border-gray-100">
+            <button onclick="toggleEditMode({{ expense.id }})" class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors font-medium text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+                Edit
+            </button>
+            <form action="{{ url_for('groups.delete_expense', group_id=group.id, expense_id=expense.id) }}" method="POST" class="inline flex-1" onsubmit="return confirm('Are you sure you want to delete this expense? This action cannot be undone.');">
+                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors font-medium text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Delete
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Inline Edit Form (Hidden by default) -->
+    <div id="edit-form-{{ expense.id }}" class="hidden mt-4 bg-gray-50 rounded-xl border-2 border-gray-300 p-5">
+        <form method="POST" action="{{ url_for('groups.edit_expense', group_id=group.id, expense_id=expense.id) }}" class="space-y-4">
+            <h5 class="text-sm font-semibold text-gray-700 mb-4">Edit Transaction</h5>
+            <!-- Description -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                <input type="text" name="description" value="{{ expense.description }}"
+                    class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900 placeholder-gray-400"
+                    placeholder="Project supplies, Team lunch..." required>
+            </div>
+
+            <!-- Amount and Payer -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Amount</label>
+                    <input type="number" name="amount" value="{{ expense.amount }}" step="0.01" min="0.01"
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900 placeholder-gray-400 font-semibold"
+                        placeholder="0.00" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Paid By</label>
+                    <select name="payer" required
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900">
+                        <option value="">Select...</option>
+                        {% for member in group.members %}
+                            <option value="{{ member.email }}" {% if member.email == expense.payer %}selected{% endif %}>
+                                {{ member.display_name or member.email }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Category -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+                <select name="category"
+                    class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900">
+                    <option value="">Select a category...</option>
+                    <option value="Food" {% if expense.category == 'Food' %}selected{% endif %}>Food</option>
+                    <option value="Utilities" {% if expense.category == 'Utilities' %}selected{% endif %}>Utilities</option>
+                    <option value="Transport" {% if expense.category == 'Transport' %}selected{% endif %}>Transport</option>
+                    <option value="Entertainment" {% if expense.category == 'Entertainment' %}selected{% endif %}>Entertainment</option>
+                    <option value="Groceries" {% if expense.category == 'Groceries' %}selected{% endif %}>Groceries</option>
+                    <option value="Rent" {% if expense.category == 'Rent' %}selected{% endif %}>Rent</option>
+                    <option value="Travel" {% if expense.category == 'Travel' %}selected{% endif %}>Travel</option>
+                    <option value="Other" {% if expense.category == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+
+            <!-- Split Type -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Split Type</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center cursor-pointer p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <input type="radio" name="split_type" value="equal" id="edit-split-equal-{{ expense.id }}" 
+                            {% if not expense.split_type or expense.split_type == 'equal' %}checked{% endif %}
+                            class="mr-2 text-emerald-500 focus:ring-emerald-500" required>
+                        <span class="text-sm text-gray-700">Equal Split</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <input type="radio" name="split_type" value="percentage" id="edit-split-percentage-{{ expense.id }}"
+                            {% if expense.split_type == 'percentage' %}checked{% endif %}
+                            class="mr-2 text-emerald-500 focus:ring-emerald-500">
+                        <span class="text-sm text-gray-700">Percentage</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <input type="radio" name="split_type" value="shares" id="edit-split-shares-{{ expense.id }}"
+                            {% if expense.split_type == 'shares' %}checked{% endif %}
+                            class="mr-2 text-emerald-500 focus:ring-emerald-500">
+                        <span class="text-sm text-gray-700">Shares</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <input type="radio" name="split_type" value="custom" id="edit-split-custom-{{ expense.id }}"
+                            {% if expense.split_type == 'custom' %}checked{% endif %}
+                            class="mr-2 text-emerald-500 focus:ring-emerald-500">
+                        <span class="text-sm text-gray-700">Custom Amount</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Participants Selection (Equal Split) -->
+            <div id="edit-equalSplitOptions-{{ expense.id }}" class="split-option" style="display: {% if not expense.split_type or expense.split_type == 'equal' %}block{% else %}none{% endif %};">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Participants</label>
+                <div id="edit-participantsList-{{ expense.id }}" class="space-y-2 bg-white rounded-lg p-3 max-h-32 overflow-y-auto border border-gray-300">
+                    {% for member in group.members %}
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" name="participants" value="{{ member.email }}" 
+                                {% if member.email in participants %}checked{% endif %}
+                                class="mr-2 w-4 h-4 text-emerald-500 border-gray-300 rounded focus:ring-emerald-500">
+                            <span class="text-sm text-gray-700">{{ member.display_name or member.email }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <div id="edit-equalSplitSummary-{{ expense.id }}" class="mt-2 text-xs text-emerald-600 font-medium" style="display: none;">
+                    <span id="edit-splitAmount-{{ expense.id }}">$0.00</span> per person
+                </div>
+            </div>
+
+            <!-- Custom Split Options -->
+            <div id="edit-customSplitOptions-{{ expense.id }}" class="split-option" style="display: {% if expense.split_type == 'custom' %}block{% else %}none{% endif %};">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Custom Amounts</label>
+                <div id="edit-customAmountsList-{{ expense.id }}" class="space-y-2 bg-white rounded-lg p-3 max-h-32 overflow-y-auto border border-gray-300">
+                    {% for member in group.members %}
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-sm text-gray-700 font-medium">{{ member.display_name or member.email }}:</label>
+                            <input type="number" name="custom_amount_{{ member.email }}" 
+                                value="{{ split_details.get(member.email, '') if split_details else '' }}"
+                                step="0.01" min="0"
+                                class="w-24 px-2 py-1.5 bg-white border border-gray-300 rounded text-sm custom-amount-input focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900">
+                        </div>
+                    {% endfor %}
+                </div>
+                <div id="edit-customSplitSummary-{{ expense.id }}" class="mt-2 text-xs font-medium" style="display: none;">
+                    Total: $<span id="edit-customTotal-{{ expense.id }}" class="text-gray-700">0.00</span> / $<span id="edit-customExpected-{{ expense.id }}" class="text-gray-700">0.00</span>
+                </div>
+            </div>
+
+            <!-- Percentage Split Options -->
+            <div id="edit-percentageSplitOptions-{{ expense.id }}" class="split-option" style="display: {% if expense.split_type == 'percentage' %}block{% else %}none{% endif %};">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Percentages (%)</label>
+                <div id="edit-percentageList-{{ expense.id }}" class="space-y-2 bg-white rounded-lg p-3 max-h-32 overflow-y-auto border border-gray-300">
+                    {% for member in group.members %}
+                        {% set member_amount = split_details.get(member.email, 0) if split_details else 0 %}
+                        {% set percentage = (member_amount / expense.amount * 100) if expense.amount > 0 else 0 %}
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-sm text-gray-700 font-medium">{{ member.display_name or member.email }}:</label>
+                            <div class="relative">
+                                <input type="number" name="percentage_{{ member.email }}" 
+                                    value="{{ '%.2f'|format(percentage) if percentage > 0 else '' }}"
+                                    step="0.01" min="0" max="100"
+                                    class="w-24 px-2 py-1.5 pr-8 bg-white border border-gray-300 rounded text-sm percentage-input focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900">
+                                <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">%</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div id="edit-percentageSplitSummary-{{ expense.id }}" class="mt-2 text-xs font-medium" style="display: none;">
+                    Total: <span id="edit-percentageTotal-{{ expense.id }}" class="text-gray-700">0.00</span>% / 100%
+                </div>
+            </div>
+
+            <!-- Shares Split Options -->
+            <div id="edit-sharesSplitOptions-{{ expense.id }}" class="split-option" style="display: {% if expense.split_type == 'shares' %}block{% else %}none{% endif %};">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Shares</label>
+                <div id="edit-sharesList-{{ expense.id }}" class="space-y-2 bg-white rounded-lg p-3 max-h-32 overflow-y-auto border border-gray-300">
+                    {% for member in group.members %}
+                        {% set share = 1 if member.email in participants else '' %}
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-sm text-gray-700 font-medium">{{ member.display_name or member.email }}:</label>
+                            <input type="number" name="shares_{{ member.email }}" 
+                                value="{{ share if share != '' else '' }}"
+                                step="1" min="0"
+                                class="w-24 px-2 py-1.5 bg-white border border-gray-300 rounded text-sm shares-input focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900">
+                        </div>
+                    {% endfor %}
+                </div>
+                <div id="edit-sharesSplitSummary-{{ expense.id }}" class="mt-2 text-xs font-medium" style="display: none;">
+                    Total shares: <span id="edit-sharesTotal-{{ expense.id }}" class="text-gray-700">0</span>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="button" onclick="prepareFormSubmission({{ expense.id }})"
+                    class="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-2.5 rounded-lg font-medium hover:from-emerald-600 hover:to-teal-600 transform hover:scale-[1.01] transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                    Save Changes
+                </button>
+                <button type="button" onclick="cancelEditMode({{ expense.id }})"
+                    class="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-300 transform hover:scale-[1.01] transition-all duration-200 flex items-center justify-center gap-2">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleEditMode(expenseId) {
+    const expenseView = document.getElementById(`expense-view-${expenseId}`);
+    const editForm = document.getElementById(`edit-form-${expenseId}`);
+    
+    if (!expenseView || !editForm) return;
+    
+    expenseView.style.display = 'none';
+    editForm.classList.remove('hidden');
+    
+    // Disable hidden split option inputs to prevent validation errors
+    const splitTypeRadios = document.querySelectorAll(`input[name="split_type"]`);
+    let selectedSplitType = 'equal';
+    splitTypeRadios.forEach(radio => {
+        if (radio.checked) selectedSplitType = radio.value;
+    });
+    
+    // Disable all split option inputs first
+    const allSplitInputs = document.querySelectorAll(`#edit-form-${expenseId} .split-option input`);
+    allSplitInputs.forEach(input => {
+        input.disabled = true;
+    });
+    
+    // Enable only the inputs for the selected split type
+    if (selectedSplitType === 'equal') {
+        const equalInputs = document.querySelectorAll(`#edit-participantsList-${expenseId} input[type="checkbox"]`);
+        equalInputs.forEach(input => {
+            input.disabled = false;
+        });
+    } else if (selectedSplitType === 'custom') {
+        const customInputs = document.querySelectorAll(`#edit-customAmountsList-${expenseId} .custom-amount-input`);
+        customInputs.forEach(input => {
+            input.disabled = false;
+        });
+    } else if (selectedSplitType === 'percentage') {
+        const percentageInputs = document.querySelectorAll(`#edit-percentageList-${expenseId} .percentage-input`);
+        percentageInputs.forEach(input => {
+            input.disabled = false;
+        });
+    } else if (selectedSplitType === 'shares') {
+        const sharesInputs = document.querySelectorAll(`#edit-sharesList-${expenseId} .shares-input`);
+        sharesInputs.forEach(input => {
+            input.disabled = false;
+        });
+    }
+    
+    // Setup split type handlers when form is shown
+    setupSplitTypeHandlers(expenseId);
+    updateSplitCalculations(expenseId);
+}
+
+function cancelEditMode(expenseId) {
+    const expenseView = document.getElementById(`expense-view-${expenseId}`);
+    const editForm = document.getElementById(`edit-form-${expenseId}`);
+    
+    if (!expenseView || !editForm) return;
+    
+    expenseView.style.display = 'block';
+    editForm.classList.add('hidden');
+}
+
+function toggleCommentEdit(commentId) {
+    const commentView = document.getElementById(`comment-view-${commentId}`);
+    const commentEdit = document.getElementById(`comment-edit-${commentId}`);
+    
+    if (!commentView || !commentEdit) return;
+    
+    commentView.style.display = 'none';
+    commentEdit.classList.remove('hidden');
+}
+
+function cancelCommentEdit(commentId) {
+    const commentView = document.getElementById(`comment-view-${commentId}`);
+    const commentEdit = document.getElementById(`comment-edit-${commentId}`);
+    
+    if (!commentView || !commentEdit) return;
+    
+    commentView.style.display = 'block';
+    commentEdit.classList.add('hidden');
+}
+
+// Track which expense forms have handlers set up
+const expenseFormHandlers = new Set();
+
+// Setup split type change handlers
+function setupSplitTypeHandlers(expenseId) {
+    // Skip if already set up
+    if (expenseFormHandlers.has(expenseId)) {
+        return;
+    }
+    expenseFormHandlers.add(expenseId);
+    
+    const splitTypeRadios = document.querySelectorAll(`input[name="split_type"]`);
+    
+    splitTypeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            const equalOptions = document.getElementById(`edit-equalSplitOptions-${expenseId}`);
+            const percentageOptions = document.getElementById(`edit-percentageSplitOptions-${expenseId}`);
+            const sharesOptions = document.getElementById(`edit-sharesSplitOptions-${expenseId}`);
+            const customOptions = document.getElementById(`edit-customSplitOptions-${expenseId}`);
+            
+            // Disable all split option inputs first
+            const allSplitInputs = document.querySelectorAll(`#edit-form-${expenseId} .split-option input`);
+            allSplitInputs.forEach(input => {
+                input.disabled = true;
+            });
+            
+            // Show/hide sections
+            if (equalOptions) equalOptions.style.display = this.value === 'equal' ? 'block' : 'none';
+            if (percentageOptions) percentageOptions.style.display = this.value === 'percentage' ? 'block' : 'none';
+            if (sharesOptions) sharesOptions.style.display = this.value === 'shares' ? 'block' : 'none';
+            if (customOptions) customOptions.style.display = this.value === 'custom' ? 'block' : 'none';
+            
+            // Enable only the inputs for the selected split type
+            if (this.value === 'equal') {
+                const equalInputs = document.querySelectorAll(`#edit-participantsList-${expenseId} input[type="checkbox"]`);
+                equalInputs.forEach(input => {
+                    input.disabled = false;
+                });
+            } else if (this.value === 'custom') {
+                const customInputs = document.querySelectorAll(`#edit-customAmountsList-${expenseId} .custom-amount-input`);
+                customInputs.forEach(input => {
+                    input.disabled = false;
+                });
+            } else if (this.value === 'percentage') {
+                const percentageInputs = document.querySelectorAll(`#edit-percentageList-${expenseId} .percentage-input`);
+                percentageInputs.forEach(input => {
+                    input.disabled = false;
+                });
+            } else if (this.value === 'shares') {
+                const sharesInputs = document.querySelectorAll(`#edit-sharesList-${expenseId} .shares-input`);
+                sharesInputs.forEach(input => {
+                    input.disabled = false;
+                });
+            }
+            
+            updateSplitCalculations(expenseId);
+        });
+    });
+    
+    // Setup listeners for input changes
+    const amountInput = document.querySelector(`#edit-form-${expenseId} input[name="amount"]`);
+    if (amountInput) {
+        amountInput.addEventListener('input', () => updateSplitCalculations(expenseId));
+    }
+    
+    const participantsList = document.getElementById(`edit-participantsList-${expenseId}`);
+    if (participantsList) {
+        participantsList.addEventListener('change', () => updateSplitCalculations(expenseId));
+    }
+    
+    const customAmountsList = document.getElementById(`edit-customAmountsList-${expenseId}`);
+    if (customAmountsList) {
+        customAmountsList.addEventListener('input', (e) => {
+            if (e.target.classList.contains('custom-amount-input')) {
+                updateSplitCalculations(expenseId);
+            }
+        });
+    }
+    
+    const percentageList = document.getElementById(`edit-percentageList-${expenseId}`);
+    if (percentageList) {
+        percentageList.addEventListener('input', (e) => {
+            if (e.target.classList.contains('percentage-input')) {
+                updateSplitCalculations(expenseId);
+            }
+        });
+    }
+    
+    const sharesList = document.getElementById(`edit-sharesList-${expenseId}`);
+    if (sharesList) {
+        sharesList.addEventListener('input', (e) => {
+            if (e.target.classList.contains('shares-input')) {
+                updateSplitCalculations(expenseId);
+            }
+        });
+    }
+}
+
+// Prepare form for submission by disabling hidden fields
+function prepareFormSubmission(expenseId) {
+    // Get the selected split type
+    const splitTypeRadios = document.querySelectorAll(`input[name="split_type"]`);
+    let selectedSplitType = 'equal';
+    splitTypeRadios.forEach(radio => {
+        if (radio.checked) selectedSplitType = radio.value;
+    });
+    
+    // Disable all split option inputs first
+    const allSplitInputs = document.querySelectorAll(`#edit-form-${expenseId} .split-option input`);
+    allSplitInputs.forEach(input => {
+        input.disabled = true;
+        input.removeAttribute('required');
+    });
+    
+    // Enable only the inputs for the selected split type
+    if (selectedSplitType === 'equal') {
+        const equalInputs = document.querySelectorAll(`#edit-participantsList-${expenseId} input[type="checkbox"]`);
+        equalInputs.forEach(input => {
+            input.disabled = false;
+        });
+    } else if (selectedSplitType === 'custom') {
+        const customInputs = document.querySelectorAll(`#edit-customAmountsList-${expenseId} .custom-amount-input`);
+        customInputs.forEach(input => {
+            input.disabled = false;
+        });
+    } else if (selectedSplitType === 'percentage') {
+        const percentageInputs = document.querySelectorAll(`#edit-percentageList-${expenseId} .percentage-input`);
+        percentageInputs.forEach(input => {
+            input.disabled = false;
+        });
+    } else if (selectedSplitType === 'shares') {
+        const sharesInputs = document.querySelectorAll(`#edit-sharesList-${expenseId} .shares-input`);
+        sharesInputs.forEach(input => {
+            input.disabled = false;
+        });
+    }
+    
+    // Submit the form
+    const form = document.querySelector(`#edit-form-${expenseId} form`);
+    if (form) {
+        form.submit();
+    }
+}
+
+// Update split calculations based on current form values
+function updateSplitCalculations(expenseId) {
+    const amountInput = document.querySelector(`#edit-form-${expenseId} input[name="amount"]`);
+    const amount = parseFloat(amountInput?.value) || 0;
+    
+    const splitTypeRadios = document.querySelectorAll(`input[name="split_type"]`);
+    let selectedSplitType = 'equal';
+    splitTypeRadios.forEach(radio => {
+        if (radio.checked) selectedSplitType = radio.value;
+    });
+    
+    if (selectedSplitType === 'equal') {
+        const participants = document.querySelectorAll(`#edit-participantsList-${expenseId} input[type="checkbox"]:checked`);
+        const count = participants.length;
+        const splitAmount = count > 0 ? amount / count : 0;
+        
+        const summary = document.getElementById(`edit-equalSplitSummary-${expenseId}`);
+        const splitAmountSpan = document.getElementById(`edit-splitAmount-${expenseId}`);
+        if (summary && splitAmountSpan) {
+            splitAmountSpan.textContent = `$${splitAmount.toFixed(2)}`;
+            summary.style.display = count > 0 ? 'block' : 'none';
+        }
+    } else if (selectedSplitType === 'custom') {
+        const customInputs = document.querySelectorAll(`#edit-customAmountsList-${expenseId} .custom-amount-input`);
+        let total = 0;
+        customInputs.forEach(input => {
+            total += parseFloat(input.value) || 0;
+        });
+        
+        const summary = document.getElementById(`edit-customSplitSummary-${expenseId}`);
+        const totalSpan = document.getElementById(`edit-customTotal-${expenseId}`);
+        const expectedSpan = document.getElementById(`edit-customExpected-${expenseId}`);
+        if (summary && totalSpan && expectedSpan) {
+            totalSpan.textContent = total.toFixed(2);
+            expectedSpan.textContent = amount.toFixed(2);
+            summary.style.display = 'block';
+        }
+    } else if (selectedSplitType === 'percentage') {
+        const percentageInputs = document.querySelectorAll(`#edit-percentageList-${expenseId} .percentage-input`);
+        let total = 0;
+        percentageInputs.forEach(input => {
+            total += parseFloat(input.value) || 0;
+        });
+        
+        const summary = document.getElementById(`edit-percentageSplitSummary-${expenseId}`);
+        const totalSpan = document.getElementById(`edit-percentageTotal-${expenseId}`);
+        if (summary && totalSpan) {
+            totalSpan.textContent = total.toFixed(2);
+            summary.style.display = 'block';
+        }
+    } else if (selectedSplitType === 'shares') {
+        const sharesInputs = document.querySelectorAll(`#edit-sharesList-${expenseId} .shares-input`);
+        let total = 0;
+        sharesInputs.forEach(input => {
+            total += parseFloat(input.value) || 0;
+        });
+        
+        const summary = document.getElementById(`edit-sharesSplitSummary-${expenseId}`);
+        const totalSpan = document.getElementById(`edit-sharesTotal-${expenseId}`);
+        if (summary && totalSpan) {
+            totalSpan.textContent = total;
+            summary.style.display = 'block';
+        }
+    }
+}
+</script>
+
+<!-- Comments Section -->
+<div class="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+            </svg>
+        </div>
+        <div>
+            <h3 class="text-xl font-bold text-gray-900">Comments</h3>
+            <p class="text-sm text-gray-500">Ask questions or discuss details</p>
+        </div>
+    </div>
+
+    <!-- Comment Form -->
+    <form method="POST" action="{{ url_for('groups.create_comment', group_id=group.id, expense_id=expense.id) }}" class="mb-6">
+        <div class="flex gap-2">
+            <textarea 
+                name="content" 
+                id="comment-content"
+                rows="3"
+                placeholder="Type your comment here..."
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900 placeholder-gray-400 resize-none"
+                required></textarea>
+            <button 
+                type="submit"
+                class="px-6 py-2 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 font-medium flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                </svg>
+                Post
+            </button>
+        </div>
+    </form>
+
+    <!-- Comments Thread -->
+    <div class="space-y-4">
+        {% if comments %}
+            {% for comment in comments %}
+                {% set comment_user = comment.user %}
+                {% set commenter_email = comment_user.email if comment_user else '' %}
+                {% set is_own_comment = comment.user_id == current_user_id %}
+                <div class="border-l-4 border-emerald-200 pl-4 py-3 bg-gray-50 rounded-r-lg">
+                    <div class="flex items-start justify-between mb-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-gray-900 text-sm">
+                                {{ email_to_name.get(commenter_email, commenter_email) if commenter_email else 'Unknown User' }}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">
+                                {{ comment.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                            </span>
+                            {% if is_own_comment %}
+                            <div class="flex items-center gap-1">
+                                <button onclick="toggleCommentEdit({{ comment.id }})" class="p-1 text-gray-400 hover:text-blue-600 transition-colors" title="Edit comment">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <form action="{{ url_for('groups.delete_comment', group_id=group.id, expense_id=expense.id, comment_id=comment.id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this comment?');">
+                                    <button type="submit" class="p-1 text-gray-400 hover:text-red-600 transition-colors" title="Delete comment">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <!-- Comment View -->
+                    <div id="comment-view-{{ comment.id }}" class="comment-view">
+                        <p class="text-gray-700 text-sm mt-1 whitespace-pre-wrap">{{ comment.content }}</p>
+                    </div>
+                    <!-- Comment Edit Form (Hidden by default) -->
+                    <div id="comment-edit-{{ comment.id }}" class="hidden mt-2">
+                        <form method="POST" action="{{ url_for('groups.edit_comment', group_id=group.id, expense_id=expense.id, comment_id=comment.id) }}" class="space-y-2">
+                            <textarea 
+                                name="content" 
+                                rows="3"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900 placeholder-gray-400 resize-none text-sm"
+                                required>{{ comment.content }}</textarea>
+                            <div class="flex gap-2">
+                                <button type="submit" class="px-4 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm font-medium">
+                                    Save
+                                </button>
+                                <button type="button" onclick="cancelCommentEdit({{ comment.id }})" class="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium">
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+                <p class="text-sm">No comments yet. Be the first to comment!</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
