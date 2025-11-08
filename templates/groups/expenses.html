@@ -58,7 +58,7 @@
             <h2 class="text-3xl font-bold text-gray-900">{{ group.name }}</h2>
             <p class="text-gray-600">Group expenses and transactions</p>
         </div>
-        <!-- ==== LEAVE GROUP BUTTON ==== -->
+    <!-- ==== LEAVE GROUP BUTTON ==== -->
         <div class="ml-auto">
            <form action="{{ url_for('groups.leave_group', group_id=group.id) }}" method="post"
           onsubmit="return confirm('Are you sure you want to leave “{{ group.name }}”?');"
@@ -73,6 +73,23 @@
         </button>
         </form>
         </div>
+        <!-- ==== DELETE GROUP BUTTON (visible only to creator) ==== -->
+        {% if group.created_by_id == session.get('user_id') %}
+        <div class="ml-2 inline">
+           <form action="{{ url_for('groups.delete_group', group_id=group.id) }}" method="post"
+                 onsubmit="return confirm('Are you sure you want to permanently delete the group “{{ group.name }}”? This cannot be undone.');"
+                 class="inline">
+            <button type="submit"
+                    class="inline-flex items-center gap-2 bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                Delete Group
+            </button>
+           </form>
+        </div>
+        {% endif %}
         <!-- ==== END LEAVE BUTTON ==== -->
     </div>
 </div>

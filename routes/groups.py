@@ -424,6 +424,7 @@ def group_expenses(group_id):
         deletion_info=deletion_info,
         edit_info=edit_info,
         transaction_count=transaction_count,
+        current_user_id=user_id,
     )
 
 
@@ -1022,4 +1023,59 @@ def leave_group(group_id):
         flash(f"You have left the group “{group.name}”.", "success")
 
     db.session.commit()
+    return redirect(url_for("groups.list_groups"))
+
+
+@groups_bp.route("/<int:group_id>/delete", methods=["POST"])
+@login_required
+def delete_group(group_id):
+    """Delete the group — only the creator may delete the group."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Verify membership
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Only creator can delete
+    if group.created_by_id != user.id:
+        flash("Only the group creator can delete this group.", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Delete group and redirect to groups list
+    # Delete related child objects first to avoid FK NOT NULL issues (invitations, notifications, expenses)
+    # Invitations have group_id non-nullable so they must be removed before deleting the group.
+    try:
+        # Delete invitations
+        for inv in list(group.invitations):
+            db.session.delete(inv)
+
+        # Delete notifications
+        from models import GroupNotification, Expense
+
+        for note in list(group.notifications):
+            db.session.delete(note)
+
+        # Delete expenses (and their comments via cascade defined on Comment)
+        for exp in list(group.expenses):
+            db.session.delete(exp)
+
+        db.session.delete(group)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Failed to delete group due to related data constraints.", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    flash(f"Group '{group.name}' deleted successfully.", "success")
     return redirect(url_for("groups.list_groups"))
