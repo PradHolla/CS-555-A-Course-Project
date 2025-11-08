@@ -759,3 +759,38 @@ def leave_group(group_id):
 
     db.session.commit()
     return redirect(url_for("groups.list_groups"))
+
+@groups_bp.route("/<int:group_id>/delete", methods=["POST"])
+@login_required
+def delete_group(group_id):
+    """Delete a group and all its associated expenses."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+    
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Load the group
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Only the group admin (creator) can delete the group
+    if group.created_by_id != user.id:
+        flash("Only the group admin can delete the group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Delete all expenses associated with the group
+    Expense.query.filter_by(group_id=group_id).delete()
+    
+    # Delete all group invitations
+    GroupInvitation.query.filter_by(group_id=group_id).delete()
+    
+    # Delete the group
+    db.session.delete(group)
+    db.session.commit()
+
+    flash(f'Group "{group.name}" has been deleted successfully', "success")
+    return redirect(url_for("groups.list_groups"))

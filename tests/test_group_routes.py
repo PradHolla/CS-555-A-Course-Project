@@ -272,6 +272,130 @@ def test_group_expenses_get_returns_ok(client, app):
     assert b"Test Group" in response.data
 
 
+def test_delete_group_success(client, app):
+    """Test that admin can successfully delete a group."""
+    # Arrange
+    from extensions import db
+    from models import Expense, GroupInvitation
+
+    admin = User(email="admin@example.com")
+    member = User(email="member@example.com")
+    db.session.add_all([admin, member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=admin.id)
+    group.members.extend([admin, member])
+    db.session.add(group)
+    db.session.commit()
+
+    # Add an expense to the group
+    expense = Expense(
+        description="Lunch",
+        amount=30.0,
+        payer="admin@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"admin@example.com": 15.0, "member@example.com": 15.0}',
+        participants="admin@example.com, member@example.com",
+    )
+    db.session.add(expense)
+
+    # Add an invitation
+    invitation = GroupInvitation(
+        email="newuser@example.com",
+        group_id=group.id,
+        invited_by_id=admin.id,
+        status="pending"
+    )
+    db.session.add(invitation)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = admin.id
+        sess["user_email"] = admin.email
+
+    # Act
+    response = client.post(f"/groups/{group.id}/delete", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert db.session.get(Group, group.id) is None
+    assert Expense.query.filter_by(group_id=group.id).first() is None
+    assert GroupInvitation.query.filter_by(group_id=group.id).first() is None
+    assert b'has been deleted successfully' in response.data  # More flexible check for success message
+
+
+def test_delete_group_non_admin_fails(client, app):
+    """Test that non-admin cannot delete a group."""
+    # Arrange
+    from extensions import db
+
+    admin = User(email="admin@example.com")
+    member = User(email="member@example.com")
+    db.session.add_all([admin, member])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=admin.id)
+    group.members.extend([admin, member])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = member.id
+        sess["user_email"] = member.email
+
+    # Act
+    response = client.post(f"/groups/{group.id}/delete", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Only the group admin can delete the group" in response.data
+    assert db.session.get(Group, group.id) is not None  # Group should still exist
+
+
+def test_delete_group_requires_login(client, app):
+    """Test that group deletion requires authentication."""
+    # Arrange
+    from extensions import db
+
+    admin = User(email="admin@example.com")
+    db.session.add(admin)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=admin.id)
+    group.members.append(admin)
+    db.session.add(group)
+    db.session.commit()
+
+    # Act - without login session
+    response = client.post(f"/groups/{group.id}/delete", follow_redirects=False)
+
+    # Assert
+    assert response.status_code == 302  # Should redirect to login
+    assert db.session.get(Group, group.id) is not None  # Group should still exist
+
+
+def test_delete_group_not_found(client, app):
+    """Test deleting non-existent group returns error."""
+    # Arrange
+    from extensions import db
+
+    user = User(email="user@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user.id
+        sess["user_email"] = user.email
+
+    # Act - try to delete non-existent group
+    response = client.post("/groups/99999/delete", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Group not found" in response.data
+
+
 def test_group_expenses_get_requires_login(client, app):
     """Test that GET /groups/<group_id> requires login."""
     # Arrange
