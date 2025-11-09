@@ -86,31 +86,23 @@ def create_group():
                 if email == creator.email:
                     continue  # Skip creator (already added)
 
-                # Find existing user
-                user = User.query.filter_by(email=email).first()
+                # Check if invitation already exists (whether user exists or not)
+                existing_invitation = GroupInvitation.query.filter_by(
+                    email=email, group_id=group.id, status="pending"
+                ).first()
 
-                if user:
-                    # User exists - add them to the group
-                    if user not in group.members:
-                        group.members.append(user)
-                else:
-                    # User doesn't exist - create invitation
-                    # Check if invitation already exists
-                    existing_invitation = GroupInvitation.query.filter_by(
-                        email=email, group_id=group.id, status="pending"
-                    ).first()
+                if not existing_invitation:
+                    # Create invitation for all users (existing or not)
+                    invitation = GroupInvitation(
+                        email=email, group_id=group.id, invited_by_id=user_id
+                    )
+                    db.session.add(invitation)
 
-                    if not existing_invitation:
-                        invitation = GroupInvitation(
-                            email=email, group_id=group.id, invited_by_id=user_id
-                        )
-                        db.session.add(invitation)
-
-                        # Send invitation notification
-                        try:
-                            notify_group_invitation(creator.email, email, name)
-                        except Exception as e:
-                            print(f"Failed to send invitation notification: {e}")
+                    # Send invitation notification
+                    try:
+                        notify_group_invitation(creator.email, email, name)
+                    except Exception as e:
+                        print(f"Failed to send invitation notification: {e}")
 
         db.session.commit()
         flash(f"Group '{name}' created successfully!", "success")

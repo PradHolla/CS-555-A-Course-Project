@@ -7,7 +7,7 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 from flask_mail import Message
 
 from extensions import db, mail
-from models import GroupInvitation, User
+from models import User
 from services.auth_service import AuthService
 from utils.validators import is_valid_email
 
@@ -122,16 +122,6 @@ def verify_otp():
     # Clear OTP after successful verification
     user.otp = None
     user.otp_expiry = None
-
-    # Auto-accept any pending group invitations for this email
-    pending_invitations = GroupInvitation.query.filter_by(email=user.email, status="pending").all()
-    for invitation in pending_invitations:
-        # Add user to the group
-        if user not in invitation.group.members:
-            invitation.group.members.append(user)
-        # Mark invitation as accepted
-        invitation.status = "accepted"
-
     db.session.commit()
 
     # Create session
