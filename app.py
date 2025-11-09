@@ -55,11 +55,13 @@ def create_app():
 
     from routes.dashboard import dashboard_bp
     from routes.groups import groups_bp
+    from routes.invitations import invitations_bp
     from routes.profile import profile_bp
 
     app.register_blueprint(groups_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(invitations_bp)
 
     return app
 

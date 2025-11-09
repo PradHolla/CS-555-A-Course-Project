@@ -159,8 +159,11 @@ def test_logout_clears_session(client, app):
         assert "user_email" not in sess
 
 
-def test_verify_otp_auto_accepts_pending_invitations(client, app):
-    """Test that verifying OTP auto-accepts pending group invitations."""
+def test_verify_otp_does_not_auto_accept_pending_invitations(client, app):
+    """Test that verifying OTP does NOT auto-accept pending group invitations.
+    
+    Users must manually accept invitations via the /invitations page.
+    """
     # Arrange
     from datetime import datetime, timedelta, timezone
 
@@ -199,10 +202,10 @@ def test_verify_otp_auto_accepts_pending_invitations(client, app):
     # Assert
     assert response.status_code == 302
 
-    # Check user was added to group
+    # Check user was NOT automatically added to group
     db.session.refresh(group)
-    assert new_user in group.members
+    assert new_user not in group.members
 
-    # Check invitation status updated
+    # Check invitation remains pending (not auto-accepted)
     db.session.refresh(invitation)
-    assert invitation.status == "accepted"
+    assert invitation.status == "pending"

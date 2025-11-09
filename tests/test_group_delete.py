@@ -134,8 +134,11 @@ def test_delete_group_handles_commit_failure(client, app, monkeypatch):
     monkeypatch.setattr(db.session, "commit", real_commit)
 
 
-def test_create_group_adds_existing_and_invites_others(client, app):
-    """Creating a group with a mix of existing users and unknown emails should add existing users and create invitations."""
+def test_create_group_creates_invitations_for_all_users(client, app):
+    """Creating a group with a mix of existing users and unknown emails should create invitations for both.
+    
+    All users (existing or new) must accept invitations to join groups.
+    """
     from extensions import db
     from models import GroupInvitation
 
@@ -158,10 +161,18 @@ def test_create_group_adds_existing_and_invites_others(client, app):
 
     group = Group.query.filter_by(name="MixedGroup").first()
     assert group is not None
-    # existing user should be a member
-    assert any(m.email == existing.email for m in group.members)
-    # newinvite should have an invitation
-    assert GroupInvitation.query.filter_by(email="newinvite@example.com", group_id=group.id).first() is not None
+    
+    # Both existing user and new user should have invitations
+    existing_inv = GroupInvitation.query.filter_by(email=existing.email, group_id=group.id).first()
+    new_inv = GroupInvitation.query.filter_by(email="newinvite@example.com", group_id=group.id).first()
+    assert existing_inv is not None
+    assert new_inv is not None
+    assert existing_inv.status == "pending"
+    assert new_inv.status == "pending"
+    
+    # Neither should be members yet (must accept invitation first)
+    assert len(group.members) == 1  # Only creator
+    assert not any(m.email == existing.email for m in group.members)
 
 
 def test_group_expenses_create_percentage_and_shares(client, app):

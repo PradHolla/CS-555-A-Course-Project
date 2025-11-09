@@ -35,6 +35,7 @@ def app(tmp_path):
         # Email configuration for testing - records emails without sending
         MAIL_SUPPRESS_SEND=True,  # Don't actually send emails in tests
         MAIL_DEFAULT_SENDER="test@sprintpay.local",
+        EMAIL_ENABLED=False,  # Always use detailed notification logging in tests
     )
 
     with flask_app.app_context():

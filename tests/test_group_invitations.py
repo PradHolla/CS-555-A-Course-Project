@@ -33,7 +33,10 @@ def test_group_invitation_model_creation(app):
 
 
 def test_create_group_with_non_existent_member_creates_invitation(client, app):
-    """Test that creating a group with non-existent member email creates an invitation."""
+    """Test that creating a group creates invitations for both existing and non-existent users.
+    
+    All users must manually accept invitations to join groups.
+    """
     from extensions import db
 
     # Arrange - Create logged-in user
@@ -45,16 +48,16 @@ def test_create_group_with_non_existent_member_creates_invitation(client, app):
         session["user_id"] = creator.id
         session["user_email"] = creator.email
 
-    # Act - Create group with non-existent member
-    group_data = {
-        "name": "Test Group",
-        "members": "existing@example.com, newuser@example.com",
-    }
-
     # Pre-create existing user
     existing_user = User(email="existing@example.com")
     db.session.add(existing_user)
     db.session.commit()
+
+    # Act - Create group with mix of existing and non-existent members
+    group_data = {
+        "name": "Test Group",
+        "members": "existing@example.com, newuser@example.com",
+    }
 
     response = client.post("/groups/create", data=group_data, follow_redirects=False)
 
@@ -65,19 +68,30 @@ def test_create_group_with_non_existent_member_creates_invitation(client, app):
     group = Group.query.filter_by(name="Test Group").first()
     assert group is not None
 
-    # Check existing user was added to group
-    assert existing_user in group.members
+    # Check existing user NOT automatically added (must accept invitation)
+    assert existing_user not in group.members
+    assert len(group.members) == 1  # Only creator
 
-    # Check invitation was created for non-existent user
-    invitation = GroupInvitation.query.filter_by(email="newuser@example.com").first()
-    assert invitation is not None
-    assert invitation.group_id == group.id
-    assert invitation.invited_by_id == creator.id
-    assert invitation.status == "pending"
+    # Check invitations were created for BOTH users
+    existing_invitation = GroupInvitation.query.filter_by(email="existing@example.com").first()
+    new_invitation = GroupInvitation.query.filter_by(email="newuser@example.com").first()
+    
+    assert existing_invitation is not None
+    assert existing_invitation.group_id == group.id
+    assert existing_invitation.invited_by_id == creator.id
+    assert existing_invitation.status == "pending"
+    
+    assert new_invitation is not None
+    assert new_invitation.group_id == group.id
+    assert new_invitation.invited_by_id == creator.id
+    assert new_invitation.status == "pending"
 
 
-def test_create_group_with_existing_members_no_invitation(client, app):
-    """Test that creating a group with all existing members does not create invitations."""
+def test_create_group_with_existing_members_creates_invitations(client, app):
+    """Test that creating a group with existing members creates invitations for them.
+    
+    Users must manually accept invitations, even if they already have accounts.
+    """
     from extensions import db
 
     # Arrange - Create users
@@ -102,13 +116,18 @@ def test_create_group_with_existing_members_no_invitation(client, app):
     # Assert
     assert response.status_code == 302
 
-    # Check no invitations were created
+    # Check invitations WERE created for existing users
     invitations = GroupInvitation.query.all()
-    assert len(invitations) == 0
+    assert len(invitations) == 2
+    assert {inv.email for inv in invitations} == {"member1@example.com", "member2@example.com"}
+    assert all(inv.status == "pending" for inv in invitations)
 
-    # Check all members were added
+    # Check members were NOT automatically added (must accept invitation first)
     group = Group.query.filter_by(name="Existing Members Group").first()
-    assert len(group.members) == 3  # creator + 2 members
+    assert len(group.members) == 1  # Only creator initially
+    assert creator in group.members
+    assert member1 not in group.members
+    assert member2 not in group.members
 
 
 def test_invitation_notification_is_sent(client, app, capsys):
