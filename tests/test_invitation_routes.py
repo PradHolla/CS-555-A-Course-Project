@@ -322,3 +322,202 @@ def test_invitation_not_found(client, app):
     # Assert
     assert response.status_code == 200
     assert b"not found" in response.data or b"Not found" in response.data
+
+
+def test_decline_invitation_not_found(client, app):
+    """Test that declining non-existent invitation returns error."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        user = User(email="test@example.com")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = user_id
+        sess["user_email"] = "test@example.com"
+
+    # Act
+    response = client.post("/invitations/99999/decline", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"not found" in response.data or b"Not found" in response.data
+
+
+def test_accept_already_accepted_invitation(client, app):
+    """Test that accepting already-accepted invitation shows info message."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        inviter = User(email="inviter@example.com")
+        invitee = User(email="invitee@example.com")
+        db.session.add_all([inviter, invitee])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=inviter.id)
+        group.members.append(inviter)
+        db.session.add(group)
+        db.session.commit()
+
+        # Create already-accepted invitation
+        invitation = GroupInvitation(
+            email="invitee@example.com",
+            group_id=group.id,
+            invited_by_id=inviter.id,
+            status="accepted",
+        )
+        db.session.add(invitation)
+        db.session.commit()
+
+        invitee_id = invitee.id
+        invitation_id = invitation.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = invitee_id
+        sess["user_email"] = "invitee@example.com"
+
+    # Act
+    response = client.post(
+        f"/invitations/{invitation_id}/accept", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"already been processed" in response.data or b"processed" in response.data
+
+
+def test_decline_already_declined_invitation(client, app):
+    """Test that declining already-declined invitation shows info message."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        inviter = User(email="inviter@example.com")
+        invitee = User(email="invitee@example.com")
+        db.session.add_all([inviter, invitee])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=inviter.id)
+        group.members.append(inviter)
+        db.session.add(group)
+        db.session.commit()
+
+        # Create already-declined invitation
+        invitation = GroupInvitation(
+            email="invitee@example.com",
+            group_id=group.id,
+            invited_by_id=inviter.id,
+            status="declined",
+        )
+        db.session.add(invitation)
+        db.session.commit()
+
+        invitee_id = invitee.id
+        invitation_id = invitation.id
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = invitee_id
+        sess["user_email"] = "invitee@example.com"
+
+    # Act
+    response = client.post(
+        f"/invitations/{invitation_id}/decline", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"already been processed" in response.data or b"processed" in response.data
+
+
+def test_accept_invitation_database_error(client, app, monkeypatch):
+    """Test that accept_invitation handles database errors gracefully."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        inviter = User(email="inviter@example.com")
+        invitee = User(email="invitee@example.com")
+        db.session.add_all([inviter, invitee])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=inviter.id)
+        group.members.append(inviter)
+        db.session.add(group)
+        db.session.commit()
+
+        invitation = GroupInvitation(
+            email="invitee@example.com", group_id=group.id, invited_by_id=inviter.id
+        )
+        db.session.add(invitation)
+        db.session.commit()
+
+        invitee_id = invitee.id
+        invitation_id = invitation.id
+
+    # Mock db.session.commit to raise an exception
+    def mock_commit():
+        raise Exception("Database error")
+
+    monkeypatch.setattr("extensions.db.session.commit", mock_commit)
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = invitee_id
+        sess["user_email"] = "invitee@example.com"
+
+    # Act
+    response = client.post(
+        f"/invitations/{invitation_id}/accept", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Failed to accept invitation" in response.data or b"error" in response.data
+
+
+def test_decline_invitation_database_error(client, app, monkeypatch):
+    """Test that decline_invitation handles database errors gracefully."""
+    # Arrange
+    from extensions import db
+
+    with app.app_context():
+        inviter = User(email="inviter@example.com")
+        invitee = User(email="invitee@example.com")
+        db.session.add_all([inviter, invitee])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=inviter.id)
+        group.members.append(inviter)
+        db.session.add(group)
+        db.session.commit()
+
+        invitation = GroupInvitation(
+            email="invitee@example.com", group_id=group.id, invited_by_id=inviter.id
+        )
+        db.session.add(invitation)
+        db.session.commit()
+
+        invitee_id = invitee.id
+        invitation_id = invitation.id
+
+    # Mock db.session.commit to raise an exception
+    def mock_commit():
+        raise Exception("Database error")
+
+    monkeypatch.setattr("extensions.db.session.commit", mock_commit)
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = invitee_id
+        sess["user_email"] = "invitee@example.com"
+
+    # Act
+    response = client.post(
+        f"/invitations/{invitation_id}/decline", follow_redirects=True
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert b"Failed to decline invitation" in response.data or b"error" in response.data
