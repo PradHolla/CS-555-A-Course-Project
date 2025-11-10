@@ -422,7 +422,8 @@ def test_expense_list_shows_comment_count(client, app):
     # Should show comment badge only for expense with comments
     # Count occurrences of "X comments" pattern (not just "comments" word)
     import re
-    comment_badge_pattern = rb'\d+\s+comments?'
+
+    comment_badge_pattern = rb"\d+\s+comments?"
     matches = re.findall(comment_badge_pattern, response.data)
     assert len(matches) == 1  # Only one expense has comments
 
@@ -1130,11 +1131,11 @@ def test_expense_detail_group_not_found(client, app):
     """Test expense_detail handles group not found error."""
     # Arrange
     from extensions import db
-    
+
     user = User(email="user@example.com")
     db.session.add(user)
     db.session.commit()
-    
+
     expense = Expense(
         description="Lunch",
         amount=50.0,
@@ -1145,14 +1146,14 @@ def test_expense_detail_group_not_found(client, app):
     )
     db.session.add(expense)
     db.session.commit()
-    
+
     with client.session_transaction() as sess:
         sess["user_id"] = user.id
         sess["user_email"] = user.email
-    
+
     # Act
     response = client.get(f"/groups/99999/expense/{expense.id}", follow_redirects=True)
-    
+
     # Assert
     assert response.status_code == 200
     assert b"Group not found" in response.data
@@ -1162,17 +1163,17 @@ def test_expense_detail_not_member(client, app):
     """Test expense_detail requires group membership."""
     # Arrange
     from extensions import db
-    
+
     user1 = User(email="user1@example.com")
     user2 = User(email="user2@example.com")
     db.session.add_all([user1, user2])
     db.session.commit()
-    
+
     group = Group(name="Test Group", created_by_id=user1.id)
     group.members.append(user1)  # user2 is not a member
     db.session.add(group)
     db.session.commit()
-    
+
     expense = Expense(
         description="Lunch",
         amount=50.0,
@@ -1183,14 +1184,14 @@ def test_expense_detail_not_member(client, app):
     )
     db.session.add(expense)
     db.session.commit()
-    
+
     with client.session_transaction() as sess:
         sess["user_id"] = user2.id
         sess["user_email"] = user2.email
-    
+
     # Act
     response = client.get(f"/groups/{group.id}/expense/{expense.id}", follow_redirects=True)
-    
+
     # Assert
     assert response.status_code == 200
     assert b"You are not a member of this group" in response.data
@@ -1200,23 +1201,23 @@ def test_expense_detail_expense_not_found(client, app):
     """Test expense_detail handles expense not found error."""
     # Arrange
     from extensions import db
-    
+
     user = User(email="user@example.com")
     db.session.add(user)
     db.session.commit()
-    
+
     group = Group(name="Test Group", created_by_id=user.id)
     group.members.append(user)
     db.session.add(group)
     db.session.commit()
-    
+
     with client.session_transaction() as sess:
         sess["user_id"] = user.id
         sess["user_email"] = user.email
-    
+
     # Act
     response = client.get(f"/groups/{group.id}/expense/99999", follow_redirects=True)
-    
+
     # Assert
     assert response.status_code == 200
     assert b"Expense not found" in response.data
@@ -1226,18 +1227,18 @@ def test_expense_detail_wrong_group(client, app):
     """Test expense_detail handles expense from wrong group."""
     # Arrange
     from extensions import db
-    
+
     user = User(email="user@example.com")
     db.session.add(user)
     db.session.commit()
-    
+
     group1 = Group(name="Test Group 1", created_by_id=user.id)
     group2 = Group(name="Test Group 2", created_by_id=user.id)
     group1.members.append(user)
     group2.members.append(user)
     db.session.add_all([group1, group2])
     db.session.commit()
-    
+
     expense = Expense(
         description="Lunch",
         amount=50.0,
@@ -1248,14 +1249,14 @@ def test_expense_detail_wrong_group(client, app):
     )
     db.session.add(expense)
     db.session.commit()
-    
+
     with client.session_transaction() as sess:
         sess["user_id"] = user.id
         sess["user_email"] = user.email
-    
+
     # Act - try to access expense from group1 via group2 URL
     response = client.get(f"/groups/{group2.id}/expense/{expense.id}", follow_redirects=True)
-    
+
     # Assert
     assert response.status_code == 200
     assert b"Expense does not belong to this group" in response.data
@@ -1265,16 +1266,16 @@ def test_expense_detail_empty_emails(client, app):
     """Test expense_detail handles expense with no emails (edge case)."""
     # Arrange
     from extensions import db
-    
+
     user = User(email="user@example.com")
     db.session.add(user)
     db.session.commit()
-    
+
     group = Group(name="Test Group", created_by_id=user.id)
     group.members.append(user)
     db.session.add(group)
     db.session.commit()
-    
+
     # Create expense with empty split_details and no comments
     # Note: expense.payer is always added to all_emails, so to test empty case
     # we'd need payer to be None, but that's not a valid state in the model
@@ -1285,18 +1286,18 @@ def test_expense_detail_empty_emails(client, app):
         payer="user@example.com",  # Must have a payer
         group_id=group.id,
         split_type="equal",
-        split_details='{}',  # Empty split details - no participants
+        split_details="{}",  # Empty split details - no participants
     )
     db.session.add(expense)
     db.session.commit()
-    
+
     with client.session_transaction() as sess:
         sess["user_id"] = user.id
         sess["user_email"] = user.email
-    
+
     # Act
     response = client.get(f"/groups/{group.id}/expense/{expense.id}")
-    
+
     # Assert
     assert response.status_code == 200
     assert b"Lunch" in response.data
@@ -1306,16 +1307,16 @@ def test_expense_detail_fallback_email(client, app):
     """Test expense_detail uses email as fallback when user not found."""
     # Arrange
     from extensions import db
-    
+
     user = User(email="user@example.com")
     db.session.add(user)
     db.session.commit()
-    
+
     group = Group(name="Test Group", created_by_id=user.id)
     group.members.append(user)
     db.session.add(group)
     db.session.commit()
-    
+
     # Create expense with payer email that doesn't have a user record
     expense = Expense(
         description="Lunch",
@@ -1327,16 +1328,15 @@ def test_expense_detail_fallback_email(client, app):
     )
     db.session.add(expense)
     db.session.commit()
-    
+
     with client.session_transaction() as sess:
         sess["user_id"] = user.id
         sess["user_email"] = user.email
-    
+
     # Act
     response = client.get(f"/groups/{group.id}/expense/{expense.id}")
-    
+
     # Assert
     assert response.status_code == 200
     assert b"Lunch" in response.data
     # Should use email as fallback when user not found
-

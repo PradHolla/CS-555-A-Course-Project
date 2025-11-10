@@ -34,7 +34,7 @@ def test_group_invitation_model_creation(app):
 
 def test_create_group_with_non_existent_member_creates_invitation(client, app):
     """Test that creating a group creates invitations for both existing and non-existent users.
-    
+
     All users must manually accept invitations to join groups.
     """
     from extensions import db
@@ -75,12 +75,12 @@ def test_create_group_with_non_existent_member_creates_invitation(client, app):
     # Check invitations were created for BOTH users
     existing_invitation = GroupInvitation.query.filter_by(email="existing@example.com").first()
     new_invitation = GroupInvitation.query.filter_by(email="newuser@example.com").first()
-    
+
     assert existing_invitation is not None
     assert existing_invitation.group_id == group.id
     assert existing_invitation.invited_by_id == creator.id
     assert existing_invitation.status == "pending"
-    
+
     assert new_invitation is not None
     assert new_invitation.group_id == group.id
     assert new_invitation.invited_by_id == creator.id
@@ -89,7 +89,7 @@ def test_create_group_with_non_existent_member_creates_invitation(client, app):
 
 def test_create_group_with_existing_members_creates_invitations(client, app):
     """Test that creating a group with existing members creates invitations for them.
-    
+
     Users must manually accept invitations, even if they already have accounts.
     """
     from extensions import db

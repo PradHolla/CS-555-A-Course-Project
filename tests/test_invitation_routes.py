@@ -236,15 +236,24 @@ def test_invitations_list_only_shows_pending(client, app):
 
         # Pending invitation
         invitation1 = GroupInvitation(
-            email="invitee@example.com", group_id=group1.id, invited_by_id=inviter.id, status="pending"
+            email="invitee@example.com",
+            group_id=group1.id,
+            invited_by_id=inviter.id,
+            status="pending",
         )
         # Accepted invitation
         invitation2 = GroupInvitation(
-            email="invitee@example.com", group_id=group2.id, invited_by_id=inviter.id, status="accepted"
+            email="invitee@example.com",
+            group_id=group2.id,
+            invited_by_id=inviter.id,
+            status="accepted",
         )
         # Declined invitation
         invitation3 = GroupInvitation(
-            email="invitee@example.com", group_id=group3.id, invited_by_id=inviter.id, status="declined"
+            email="invitee@example.com",
+            group_id=group3.id,
+            invited_by_id=inviter.id,
+            status="declined",
         )
         db.session.add_all([invitation1, invitation2, invitation3])
         db.session.commit()
@@ -381,9 +390,7 @@ def test_accept_already_accepted_invitation(client, app):
         sess["user_email"] = "invitee@example.com"
 
     # Act
-    response = client.post(
-        f"/invitations/{invitation_id}/accept", follow_redirects=True
-    )
+    response = client.post(f"/invitations/{invitation_id}/accept", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -424,9 +431,7 @@ def test_decline_already_declined_invitation(client, app):
         sess["user_email"] = "invitee@example.com"
 
     # Act
-    response = client.post(
-        f"/invitations/{invitation_id}/decline", follow_redirects=True
-    )
+    response = client.post(f"/invitations/{invitation_id}/decline", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -469,9 +474,7 @@ def test_accept_invitation_database_error(client, app, monkeypatch):
         sess["user_email"] = "invitee@example.com"
 
     # Act
-    response = client.post(
-        f"/invitations/{invitation_id}/accept", follow_redirects=True
-    )
+    response = client.post(f"/invitations/{invitation_id}/accept", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -514,9 +517,7 @@ def test_decline_invitation_database_error(client, app, monkeypatch):
         sess["user_email"] = "invitee@example.com"
 
     # Act
-    response = client.post(
-        f"/invitations/{invitation_id}/decline", follow_redirects=True
-    )
+    response = client.post(f"/invitations/{invitation_id}/decline", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200

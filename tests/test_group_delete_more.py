@@ -72,7 +72,6 @@ def test_delete_group_user_missing_defensive(client, app):
 def test_create_expense_notification_failure_continues(client, app, monkeypatch):
     """If notify_expense_participants raises, expense creation still succeeds."""
     from extensions import db
-    from services.notification_service import notify_expense_participants
     from models import Expense
 
     payer = User(email="notif_fail_payer@example.com")
@@ -89,7 +88,7 @@ def test_create_expense_notification_failure_continues(client, app, monkeypatch)
     def fake_notify(expense, participants):
         raise Exception("notify failed")
 
-    monkeypatch.setattr('services.notification_service.notify_expense_participants', fake_notify)
+    monkeypatch.setattr("services.notification_service.notify_expense_participants", fake_notify)
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer.id
@@ -100,8 +99,7 @@ def test_create_expense_notification_failure_continues(client, app, monkeypatch)
         "amount": "20.00",
         "payer": payer.email,
         "split_type": "equal",
-        "participants": payer.email,
-        "participants": other.email,
+        "participants": [payer.email, other.email],
     }
 
     resp = client.post(f"/groups/{group.id}", data=data, follow_redirects=False)

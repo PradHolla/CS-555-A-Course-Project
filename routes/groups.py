@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
@@ -295,16 +295,19 @@ def group_expenses(group_id):
 
     # Get all expense IDs for bulk comment count query
     expense_ids = [expense.id for expense in expenses]
-    
+
     # Bulk fetch comment counts for all expenses to avoid N+1 queries
     from sqlalchemy import func
+
     comment_counts = {}
     if expense_ids:
-        comment_count_results = db.session.query(
-            Comment.expense_id,
-            func.count(Comment.id).label('count')
-        ).filter(Comment.expense_id.in_(expense_ids)).group_by(Comment.expense_id).all()
-        
+        comment_count_results = (
+            db.session.query(Comment.expense_id, func.count(Comment.id).label("count"))
+            .filter(Comment.expense_id.in_(expense_ids))
+            .group_by(Comment.expense_id)
+            .all()
+        )
+
         comment_counts = {expense_id: count for expense_id, count in comment_count_results}
 
     # Process expenses for display
@@ -348,6 +351,13 @@ def group_expenses(group_id):
         else:
             email_to_name[email] = email  # Fallback to email if user not found
 
+    # Create expense payers map for profile pictures
+    expense_payers = {}
+    for expense in expenses:
+        payer_user = user_map.get(expense.payer)
+        if payer_user:
+            expense_payers[expense.id] = payer_user
+
     # Convert group members to JSON-serializable format
     groups_data = [
         {
@@ -369,9 +379,11 @@ def group_expenses(group_id):
     from models import GroupNotification
 
     # Get unread deletion notifications for this group
-    deletion_notifications = GroupNotification.query.filter_by(
-        group_id=group_id, notification_type="expense_deleted"
-    ).order_by(GroupNotification.created_at.desc()).all()
+    deletion_notifications = (
+        GroupNotification.query.filter_by(group_id=group_id, notification_type="expense_deleted")
+        .order_by(GroupNotification.created_at.desc())
+        .all()
+    )
 
     # Find deletion notifications the current user hasn't seen
     for notification in deletion_notifications:
@@ -387,9 +399,11 @@ def group_expenses(group_id):
             break  # Show the most recent unread notification
 
     # Get unread edit notifications for this group
-    edit_notifications = GroupNotification.query.filter_by(
-        group_id=group_id, notification_type="expense_edited"
-    ).order_by(GroupNotification.created_at.desc()).all()
+    edit_notifications = (
+        GroupNotification.query.filter_by(group_id=group_id, notification_type="expense_edited")
+        .order_by(GroupNotification.created_at.desc())
+        .all()
+    )
 
     # Find edit notifications the current user hasn't seen
     for notification in edit_notifications:
@@ -413,6 +427,7 @@ def group_expenses(group_id):
         expenses=expense_views,
         groups_data=groups_data,
         email_to_name=email_to_name,
+        expense_payers=expense_payers,
         deletion_info=deletion_info,
         edit_info=edit_info,
         transaction_count=transaction_count,
@@ -452,7 +467,9 @@ def expense_detail(group_id, expense_id):
         return redirect(url_for("groups.group_expenses", group_id=group_id))
 
     # Fetch comments ordered by created_at (chronological)
-    comments = Comment.query.filter_by(expense_id=expense_id).order_by(Comment.created_at.asc()).all()
+    comments = (
+        Comment.query.filter_by(expense_id=expense_id).order_by(Comment.created_at.asc()).all()
+    )
 
     # Process expense for display
     split_details = ExpenseService._parse_split_details(expense)
@@ -542,7 +559,9 @@ def delete_expense(group_id, expense_id):
             self.payer = payer
             self.participants = participants
 
-    expense_info = ExpenseInfo(expense_description, expense_amount, expense_payer, expense_participants)
+    expense_info = ExpenseInfo(
+        expense_description, expense_amount, expense_payer, expense_participants
+    )
 
     # Delete the expense
     db.session.delete(expense)
@@ -625,7 +644,9 @@ def edit_expense(group_id, expense_id):
         amount = float(amount_raw)
         if amount <= 0:
             flash("Amount must be greater than zero", "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
     except (ValueError, TypeError):
         flash("Please enter a valid amount", "error")
         return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
@@ -644,13 +665,17 @@ def edit_expense(group_id, expense_id):
         selected_participants = request.form.getlist("participants")
         if not selected_participants:
             flash("Please select at least one participant", "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
         # Validate all participants are in group
         for participant in selected_participants:
             if participant not in group_member_emails:
                 flash(f"Participant '{participant}' is not in the group", "error")
-                return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+                return redirect(
+                    url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+                )
 
         # Calculate equal split
         split_details = ExpenseService.calculate_equal_split(selected_participants, amount)
@@ -666,17 +691,23 @@ def edit_expense(group_id, expense_id):
                     split_details[member_email] = float(percentage_value)
                 except ValueError:
                     flash(f"Invalid percentage for {member_email}", "error")
-                    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+                    return redirect(
+                        url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+                    )
 
         if not split_details:
             flash("Please specify percentages for at least one participant", "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
         # Validate percentage split
         is_valid, error_msg = ExpenseService.validate_percentage_split(split_details)
         if not is_valid:
             flash(error_msg, "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
         # Calculate amounts from percentages
         split_details = ExpenseService.calculate_percentage_split(split_details, amount)
@@ -692,17 +723,23 @@ def edit_expense(group_id, expense_id):
                     split_details[member_email] = float(shares_value)
                 except ValueError:
                     flash(f"Invalid shares for {member_email}", "error")
-                    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+                    return redirect(
+                        url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+                    )
 
         if not split_details:
             flash("Please specify shares for at least one participant", "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
         # Validate shares split
         is_valid, error_msg = ExpenseService.validate_shares_split(split_details)
         if not is_valid:
             flash(error_msg, "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
         # Calculate amounts from shares
         split_details = ExpenseService.calculate_shares_split(split_details, amount)
@@ -718,23 +755,25 @@ def edit_expense(group_id, expense_id):
                     split_details[member_email] = float(custom_amount)
                 except ValueError:
                     flash(f"Invalid amount for {member_email}", "error")
-                    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+                    return redirect(
+                        url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+                    )
 
         if not split_details:
             flash("Please specify amounts for at least one participant", "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
         # Validate custom split
         is_valid, error_msg = ExpenseService.validate_custom_split(split_details, amount)
         if not is_valid:
             flash(error_msg, "error")
-            return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+            return redirect(
+                url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id)
+            )
 
-
-    # Store old expense values for notification (before update)
-    old_description = expense.description
-    old_amount = expense.amount
-    old_payer = expense.payer
+    # Store editor name for notification
     editor_name = user.display_name or user.email
 
     # Create a simple object for notification
@@ -834,7 +873,9 @@ def create_comment(group_id, expense_id):
     return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
 
-@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/comment/<int:comment_id>/edit", methods=["POST"])
+@groups_bp.route(
+    "/<int:group_id>/expense/<int:expense_id>/comment/<int:comment_id>/edit", methods=["POST"]
+)
 @login_required
 def edit_comment(group_id, expense_id, comment_id):
     """Edit a comment on an expense."""
@@ -895,7 +936,9 @@ def edit_comment(group_id, expense_id, comment_id):
     return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
 
-@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/comment/<int:comment_id>/delete", methods=["POST"])
+@groups_bp.route(
+    "/<int:group_id>/expense/<int:expense_id>/comment/<int:comment_id>/delete", methods=["POST"]
+)
 @login_required
 def delete_comment(group_id, expense_id, comment_id):
     """Delete a comment on an expense."""
@@ -978,6 +1021,7 @@ def mark_notification_read(group_id, notification_id):
 
     return redirect(url_for("groups.group_expenses", group_id=group_id))
 
+
 @groups_bp.route("/<int:group_id>/leave", methods=["POST"])
 @login_required
 def leave_group(group_id):
@@ -1053,7 +1097,6 @@ def delete_group(group_id):
             db.session.delete(inv)
 
         # Delete notifications
-        from models import GroupNotification, Expense
 
         for note in list(group.notifications):
             db.session.delete(note)
@@ -1071,3 +1114,159 @@ def delete_group(group_id):
 
     flash(f"Group '{group.name}' deleted successfully.", "success")
     return redirect(url_for("groups.list_groups"))
+
+
+@groups_bp.route("/<int:group_id>/settings")
+@login_required
+def group_settings(group_id):
+    """Display group settings page."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Verify membership
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    return render_template("groups/settings.html", group=group)
+
+
+@groups_bp.route("/<int:group_id>/upload-picture", methods=["POST"])
+@login_required
+def upload_group_picture(group_id):
+    """Upload a profile picture for a group."""
+    import os
+
+    from PIL import Image
+    from werkzeug.utils import secure_filename
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Verify membership
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Check if file was uploaded
+    if "profile_picture" not in request.files:
+        flash("No file uploaded", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    file = request.files["profile_picture"]
+
+    if file.filename == "":
+        flash("No file selected", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    # Validate file type
+    allowed_extensions = {"png", "jpg", "jpeg", "gif", "webp"}
+    file_ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else ""
+
+    if file_ext not in allowed_extensions:
+        flash("Invalid file type. Please upload an image (PNG, JPG, JPEG, GIF, or WEBP).", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    # Generate unique filename
+    filename = secure_filename(
+        f"group_{group_id}_{datetime.now(timezone.utc).timestamp()}.{file_ext}"
+    )
+    upload_folder = os.path.join("static", "uploads", "group_pics")
+    os.makedirs(upload_folder, exist_ok=True)
+    filepath = os.path.join(upload_folder, filename)
+
+    try:
+        # Open and resize image
+        img = Image.open(file.stream)
+
+        # Convert RGBA to RGB if necessary
+        if img.mode == "RGBA":
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+            img = background
+
+        # Resize to max 500x500 while maintaining aspect ratio
+        img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+
+        # Save as JPEG with optimization
+        img.save(filepath, "JPEG", quality=85, optimize=True)
+
+        # Delete old profile picture if exists
+        if group.profile_picture:
+            old_filepath = os.path.join(upload_folder, group.profile_picture)
+            if os.path.exists(old_filepath):
+                os.remove(old_filepath)
+
+        # Update group record
+        group.profile_picture = filename
+        db.session.commit()
+
+        flash("Group picture updated successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to upload picture: {str(e)}", "error")
+
+    return redirect(url_for("groups.group_settings", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/delete-picture", methods=["POST"])
+@login_required
+def delete_group_picture(group_id):
+    """Delete a group's profile picture."""
+    import os
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Verify membership
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if not group.profile_picture:
+        flash("No picture to delete", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    try:
+        # Delete file from filesystem
+        filepath = os.path.join("static", "uploads", "group_pics", group.profile_picture)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+        # Update database
+        group.profile_picture = None
+        db.session.commit()
+
+        flash("Group picture deleted successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to delete picture: {str(e)}", "error")
+
+    return redirect(url_for("groups.group_settings", group_id=group_id))

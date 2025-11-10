@@ -312,4 +312,3 @@ def test_balance_summary_detailed_breakdown_with_multiple_expenses(client, app):
     # Toggle buttons should be present
     assert b"btnSimplifiedView" in response.data
     assert b"btnDetailedView" in response.data
-

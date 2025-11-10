@@ -1270,6 +1270,7 @@ def test_expense_splitter_creates_percentage_split_expense(client, app):
 
     # Check split details
     import json
+
     split_details = json.loads(stored.split_details)
     assert split_details["alice@example.com"] == 50.0
     assert split_details["bob@example.com"] == 30.0
@@ -1394,6 +1395,7 @@ def test_expense_splitter_creates_shares_split_expense(client, app):
 
     # Check split details
     import json
+
     split_details = json.loads(stored.split_details)
     # Alice gets 2/4 = $60, Bob and Charlie each get 1/4 = $30
     assert split_details["alice@example.com"] == 60.0

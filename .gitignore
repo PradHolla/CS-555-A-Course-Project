@@ -210,3 +210,7 @@ __marimo__/
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Uploaded files (keep directory structure with .gitkeep)
+static/uploads/profile_pics/*
+!static/uploads/profile_pics/.gitkeep

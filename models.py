@@ -19,6 +19,7 @@ class User(db.Model):
     email = db.Column(db.String(200), nullable=False, unique=True)
     otp = db.Column(db.String(6), nullable=True)
     otp_expiry = db.Column(db.DateTime, nullable=True)
+    profile_picture = db.Column(db.String(255), nullable=True)  # Filename for profile picture
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Many-to-many relationship with Groups
@@ -70,7 +71,9 @@ class Expense(db.Model):
 
     # Relationship
     group = db.relationship("Group", backref="expenses")
-    comments = db.relationship("Comment", backref="expense", lazy="dynamic", cascade="all, delete-orphan")
+    comments = db.relationship(
+        "Comment", backref="expense", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
 
 class Settlement(db.Model):
@@ -91,6 +94,7 @@ class Settlement(db.Model):
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    profile_picture = db.Column(db.String(255), nullable=True)  # Filename for group picture
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_by_id = db.Column(
         db.Integer, db.ForeignKey("user.id"), nullable=False
@@ -133,7 +137,9 @@ class GroupNotification(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     group_id = db.Column(db.Integer, db.ForeignKey("group.id"), nullable=False)
-    notification_type = db.Column(db.String(50), nullable=False)  # 'expense_deleted', 'expense_edited'
+    notification_type = db.Column(
+        db.String(50), nullable=False
+    )  # 'expense_deleted', 'expense_edited'
     description = db.Column(db.String(200), nullable=False)
     amount = db.Column(db.Float, nullable=True)
     payer = db.Column(db.String(200), nullable=True)

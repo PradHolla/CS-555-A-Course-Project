@@ -107,7 +107,13 @@
     {% for person, balance in balances.items()|sort(attribute='1', reverse=true) %}
     <div class="slide-in {% if balance > 0.01 %}balance-positive{% elif balance < -0.01 %}balance-negative{% else %}balance-neutral{% endif %} rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow duration-200">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-bold text-gray-900">{{ email_to_name.get(person, person) }}</h3>
+            <div class="flex items-center gap-3">
+                {% set person_user = user_map.get(person) %}
+                {% if person_user %}
+                    {{ user_avatar(person_user, size='w-10 h-10') }}
+                {% endif %}
+                <h3 class="text-lg font-bold text-gray-900">{{ email_to_name.get(person, person) }}</h3>
+            </div>
             <div class="p-2 bg-white rounded-full shadow-sm">
                 {% if balance > 0.01 %}
                 <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,10 +199,15 @@
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4 flex-1">
                     <div class="flex items-center gap-2 font-semibold text-gray-900 min-w-[120px]">
-                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
-                        {{ email_to_name.get(transaction.from, transaction.from) }}
+                        {% set from_user = user_map.get(transaction.from) %}
+                        {% if from_user %}
+                            {{ user_avatar(from_user, size='w-8 h-8') }}
+                        {% else %}
+                            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                        {% endif %}
+                        <span>{{ email_to_name.get(transaction.from, transaction.from) }}</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,10 +221,15 @@
                         </svg>
                     </div>
                     <div class="flex items-center gap-2 font-semibold text-gray-900 min-w-[120px]">
-                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
-                        {{ email_to_name.get(transaction.to, transaction.to) }}
+                        {% set to_user = user_map.get(transaction.to) %}
+                        {% if to_user %}
+                            {{ user_avatar(to_user, size='w-8 h-8') }}
+                        {% else %}
+                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                        {% endif %}
+                        <span>{{ email_to_name.get(transaction.to, transaction.to) }}</span>
                     </div>
                 </div>
                 <div class="ml-4">
@@ -271,9 +287,14 @@
             <div class="flex items-center justify-between flex-wrap gap-3">
                 <div class="flex items-center gap-4 flex-1">
                     <div class="flex items-center gap-2 font-semibold text-gray-900 min-w-[100px]">
-                        <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
+                        {% set from_user = user_map.get(transaction.from) %}
+                        {% if from_user %}
+                            {{ user_avatar(from_user, size='w-6 h-6') }}
+                        {% else %}
+                            <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                        {% endif %}
                         <span class="text-sm">{{ email_to_name.get(transaction.from, transaction.from) }}</span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -288,9 +309,14 @@
                         </svg>
                     </div>
                     <div class="flex items-center gap-2 font-semibold text-gray-900 min-w-[100px]">
-                        <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
+                        {% set to_user = user_map.get(transaction.to) %}
+                        {% if to_user %}
+                            {{ user_avatar(to_user, size='w-6 h-6') }}
+                        {% else %}
+                            <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                        {% endif %}
                         <span class="text-sm">{{ email_to_name.get(transaction.to, transaction.to) }}</span>
                     </div>
                 </div>

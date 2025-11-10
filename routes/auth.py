@@ -69,21 +69,22 @@ def request_otp():
         f"{'=' * 70}\n"
         f"{'=' * 70}\n\n"
     )
-    
+
     # Print to terminal with multiple methods for maximum visibility
     print(otp_message, flush=True)
     sys.stdout.flush()
-    
+
     # Also write to stderr for guaranteed visibility
     sys.stderr.write(otp_message)
     sys.stderr.flush()
-    
+
     # Print a simple version for easy copying
     print(f">>> COPY THIS OTP: {otp} <<<\n", flush=True)
-    
+
     # Write to file as backup
     try:
         from datetime import datetime
+
         with open("otp_log.txt", "a", encoding="utf-8") as f:
             f.write(f"{datetime.now()} - Email: {email}, OTP: {otp}\n")
             f.flush()

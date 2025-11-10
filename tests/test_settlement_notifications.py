@@ -60,7 +60,7 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
         recipient_email = call_args[0][0]
         subject = call_args[0][1]
         body = call_args[0][2]
-        
+
         assert recipient_email == "john@example.com"
         assert "neha@example.com" in subject or "$500.00" in subject
         assert "$500.00" in body

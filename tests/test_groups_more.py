@@ -5,7 +5,7 @@ comment CRUD and custom-split validation branches.
 """
 
 from extensions import db
-from models import User, Group, Expense, GroupNotification, Comment
+from models import Comment, Expense, Group, GroupNotification, User
 
 
 def test_leave_group_creator_cannot_leave(client, app):
@@ -41,7 +41,9 @@ def test_mark_notification_read_marks_user(client, app):
     db.session.add(group)
     db.session.commit()
 
-    note = GroupNotification(group_id=group.id, notification_type="expense_deleted", description="x", read_by="[]")
+    note = GroupNotification(
+        group_id=group.id, notification_type="expense_deleted", description="x", read_by="[]"
+    )
     db.session.add(note)
     db.session.commit()
 
@@ -71,7 +73,15 @@ def test_delete_expense_creates_notification_and_removes_expense(client, app):
     db.session.add(group)
     db.session.commit()
 
-    expense = Expense(description="ToDelete", amount=5.0, payer=creator.email, group_id=group.id, split_type="equal", split_details='{"d_creator@example.com":5.0}', participants=creator.email)
+    expense = Expense(
+        description="ToDelete",
+        amount=5.0,
+        payer=creator.email,
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"d_creator@example.com":5.0}',
+        participants=creator.email,
+    )
     db.session.add(expense)
     db.session.commit()
 
@@ -86,7 +96,9 @@ def test_delete_expense_creates_notification_and_removes_expense(client, app):
     assert db.session.get(Expense, expense.id) is None
 
     # a GroupNotification should have been created
-    gn = GroupNotification.query.filter_by(group_id=group.id, notification_type="expense_deleted").first()
+    gn = GroupNotification.query.filter_by(
+        group_id=group.id, notification_type="expense_deleted"
+    ).first()
     assert gn is not None
 
 
@@ -100,7 +112,15 @@ def test_comment_crud(client, app):
     db.session.add(group)
     db.session.commit()
 
-    expense = Expense(description="CExpense", amount=7.0, payer=creator.email, group_id=group.id, split_type="equal", split_details='{"c_creator@example.com":7.0}', participants=creator.email)
+    expense = Expense(
+        description="CExpense",
+        amount=7.0,
+        payer=creator.email,
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"c_creator@example.com":7.0}',
+        participants=creator.email,
+    )
     db.session.add(expense)
     db.session.commit()
 
@@ -109,19 +129,30 @@ def test_comment_crud(client, app):
         sess["user_email"] = creator.email
 
     # create comment
-    resp = client.post(f"/groups/{group.id}/expense/{expense.id}/comment", data={"content": "Nice"}, follow_redirects=False)
+    resp = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/comment",
+        data={"content": "Nice"},
+        follow_redirects=False,
+    )
     assert resp.status_code in (302, 303, 307)
     comment = Comment.query.filter_by(expense_id=expense.id).first()
     assert comment is not None
 
     # edit comment
-    resp = client.post(f"/groups/{group.id}/expense/{expense.id}/comment/{comment.id}/edit", data={"content": "Updated"}, follow_redirects=False)
+    resp = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/comment/{comment.id}/edit",
+        data={"content": "Updated"},
+        follow_redirects=False,
+    )
     assert resp.status_code in (302, 303, 307)
     refreshed = db.session.get(Comment, comment.id)
     assert refreshed.content == "Updated"
 
     # delete comment
-    resp = client.post(f"/groups/{group.id}/expense/{expense.id}/comment/{comment.id}/delete", follow_redirects=False)
+    resp = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/comment/{comment.id}/delete",
+        follow_redirects=False,
+    )
     assert resp.status_code in (302, 303, 307)
     assert db.session.get(Comment, comment.id) is None
 
@@ -137,7 +168,15 @@ def test_edit_expense_creates_notification_and_updates(client, app):
     db.session.add(group)
     db.session.commit()
 
-    expense = Expense(description="Old", amount=20.0, payer=payer.email, group_id=group.id, split_type="equal", split_details='{"e_payer@example.com":20.0}', participants=payer.email)
+    expense = Expense(
+        description="Old",
+        amount=20.0,
+        payer=payer.email,
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"e_payer@example.com":20.0}',
+        participants=payer.email,
+    )
     db.session.add(expense)
     db.session.commit()
 
@@ -154,13 +193,17 @@ def test_edit_expense_creates_notification_and_updates(client, app):
         "participants": [payer.email, p2.email],
     }
 
-    resp = client.post(f"/groups/{group.id}/expense/{expense.id}/edit", data=data, follow_redirects=False)
+    resp = client.post(
+        f"/groups/{group.id}/expense/{expense.id}/edit", data=data, follow_redirects=False
+    )
     assert resp.status_code in (302, 303, 307)
 
     updated = db.session.get(Expense, expense.id)
     assert updated.description == "NewDesc"
 
-    gn = GroupNotification.query.filter_by(group_id=group.id, notification_type="expense_edited").first()
+    gn = GroupNotification.query.filter_by(
+        group_id=group.id, notification_type="expense_edited"
+    ).first()
     assert gn is not None
 
 
@@ -189,7 +232,10 @@ def test_group_expenses_custom_split_validation(client, app):
     }
     resp = client.post(f"/groups/{group.id}", data=bad_data, follow_redirects=True)
     assert resp.status_code == 200
-    assert b"Invalid amount" in resp.data or b"Please specify amounts for at least one participant" in resp.data
+    assert (
+        b"Invalid amount" in resp.data
+        or b"Please specify amounts for at least one participant" in resp.data
+    )
 
     # valid custom split
     good_data = {

@@ -6,7 +6,7 @@ from models import Group, User
 def test_delete_group_by_creator_removes_children(client, app):
     """Creator can delete a group and related invitations/notifications/expenses are removed."""
     from extensions import db
-    from models import GroupInvitation, Expense, GroupNotification
+    from models import Expense, GroupInvitation, GroupNotification
 
     # Arrange
     creator = User(email="creator@example.com")
@@ -20,9 +20,27 @@ def test_delete_group_by_creator_removes_children(client, app):
     db.session.commit()
 
     # Add an invitation, expense and notification tied to the group
-    invitation = GroupInvitation(email="invitee@example.com", group_id=group.id, invited_by_id=creator.id)
-    expense = Expense(description="Lunch", amount=10.0, payer=creator.email, group_id=group.id, split_type="equal", split_details='{"creator@example.com": 10.0}', participants=creator.email)
-    notification = GroupNotification(group_id=group.id, notification_type="expense_deleted", description="Lunch", amount=10.0, payer=creator.email, deleted_by=creator.email, read_by="[]")
+    invitation = GroupInvitation(
+        email="invitee@example.com", group_id=group.id, invited_by_id=creator.id
+    )
+    expense = Expense(
+        description="Lunch",
+        amount=10.0,
+        payer=creator.email,
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"creator@example.com": 10.0}',
+        participants=creator.email,
+    )
+    notification = GroupNotification(
+        group_id=group.id,
+        notification_type="expense_deleted",
+        description="Lunch",
+        amount=10.0,
+        payer=creator.email,
+        deleted_by=creator.email,
+        read_by="[]",
+    )
     db.session.add_all([invitation, expense, notification])
     db.session.commit()
 
@@ -127,7 +145,10 @@ def test_delete_group_handles_commit_failure(client, app, monkeypatch):
 
     # After failure, group should still exist
     assert response.status_code == 200
-    assert b"Failed to delete group" in response.data or b"Failed to delete group due to related data constraints" in response.data
+    assert (
+        b"Failed to delete group" in response.data
+        or b"Failed to delete group due to related data constraints" in response.data
+    )
     assert db.session.get(Group, group.id) is not None
 
     # restore commit to avoid breaking other tests
@@ -136,7 +157,7 @@ def test_delete_group_handles_commit_failure(client, app, monkeypatch):
 
 def test_create_group_creates_invitations_for_all_users(client, app):
     """Creating a group with a mix of existing users and unknown emails should create invitations for both.
-    
+
     All users (existing or new) must accept invitations to join groups.
     """
     from extensions import db
@@ -161,15 +182,17 @@ def test_create_group_creates_invitations_for_all_users(client, app):
 
     group = Group.query.filter_by(name="MixedGroup").first()
     assert group is not None
-    
+
     # Both existing user and new user should have invitations
     existing_inv = GroupInvitation.query.filter_by(email=existing.email, group_id=group.id).first()
-    new_inv = GroupInvitation.query.filter_by(email="newinvite@example.com", group_id=group.id).first()
+    new_inv = GroupInvitation.query.filter_by(
+        email="newinvite@example.com", group_id=group.id
+    ).first()
     assert existing_inv is not None
     assert new_inv is not None
     assert existing_inv.status == "pending"
     assert new_inv.status == "pending"
-    
+
     # Neither should be members yet (must accept invitation first)
     assert len(group.members) == 1  # Only creator
     assert not any(m.email == existing.email for m in group.members)
