@@ -29,7 +29,12 @@ def generate_unique_filename(user_id, original_filename):
 
 
 def resize_image(image_path, max_size=(400, 400)):
-    """Resize image to fit within max_size while maintaining aspect ratio."""
+    """
+    Resize image to fit within max_size while maintaining aspect ratio.
+
+    If the image has transparency (e.g., is in RGBA, LA, or P mode), it will be converted to RGB
+    by compositing onto a white background, removing any transparency.
+    """
     with Image.open(image_path) as img:
         # Convert RGBA to RGB if necessary (for PNG with transparency)
         if img.mode in ("RGBA", "LA", "P"):
