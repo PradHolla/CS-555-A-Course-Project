@@ -506,9 +506,7 @@ def test_delete_expense_not_found(client, app):
         sess["user_email"] = payer.email
 
     # Act - try to delete non-existent expense
-    response = client.post(
-        f"/groups/{group.id}/expense/99999/delete", follow_redirects=True
-    )
+    response = client.post(f"/groups/{group.id}/expense/99999/delete", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -681,9 +679,7 @@ def test_delete_expense_shows_success_message(client, app):
         sess["user_email"] = deleter.email
 
     # Act
-    response = client.post(
-        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=True
-    )
+    response = client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -728,16 +724,16 @@ def test_delete_expense_sends_notifications(client, app):
 
     # Act
     with patch("builtins.print") as mock_print:
-        client.post(
-            f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
-        )
+        client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False)
 
         # Assert - check that notifications were printed
         assert mock_print.called
         printed_output = " ".join(str(call) for call in mock_print.call_args_list)
         # Should notify payer and other_member, but not deleter
         assert "payer@example.com" in printed_output or "other@example.com" in printed_output
-        assert "EXPENSE DELETION NOTIFICATION" in printed_output or "deleted" in printed_output.lower()
+        assert (
+            "EXPENSE DELETION NOTIFICATION" in printed_output or "deleted" in printed_output.lower()
+        )
 
 
 def test_delete_expense_no_notification_to_deleter(client, app):
@@ -777,9 +773,7 @@ def test_delete_expense_no_notification_to_deleter(client, app):
 
     # Act
     with patch("builtins.print") as mock_print:
-        client.post(
-            f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
-        )
+        client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False)
 
         # Assert - check that notification is not sent TO the deleter
         if mock_print.called:
@@ -826,9 +820,7 @@ def test_delete_expense_user_not_found_error(client, app):
         db.session.flush()  # Don't commit yet, but flush to make it visible
 
     # The login_required decorator will catch this, but we test the defensive check
-    response = client.post(
-        f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=True
-    )
+    response = client.post(f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=True)
 
     # Assert - login_required decorator should redirect to login
     assert response.status_code == 200
@@ -862,9 +854,7 @@ def test_delete_expense_group_not_found_error(client, app):
         sess["user_email"] = user.email
 
     # Act
-    response = client.post(
-        f"/groups/99999/expense/{expense_id}/delete", follow_redirects=True
-    )
+    response = client.post(f"/groups/99999/expense/{expense_id}/delete", follow_redirects=True)
 
     # Assert
     assert response.status_code == 200
@@ -1108,9 +1098,10 @@ def test_edit_expense_rejects_negative_shares(client, app):
 def test_delete_expense_handles_notification_error(client, app):
     """Test that expense deletion continues even if notification fails."""
     # Arrange
+    from unittest.mock import patch
+
     from extensions import db
     from models import Expense, GroupNotification
-    from unittest.mock import patch
 
     payer = User(email="payer@example.com")
     deleter = User(email="deleter@example.com")
@@ -1140,7 +1131,9 @@ def test_delete_expense_handles_notification_error(client, app):
         sess["user_email"] = deleter.email
 
     # Act - Simulate notification failure
-    with patch("routes.groups.notify_expense_deletion", side_effect=Exception("Notification error")):
+    with patch(
+        "routes.groups.notify_expense_deletion", side_effect=Exception("Notification error")
+    ):
         response = client.post(
             f"/groups/{group.id}/expense/{expense_id}/delete", follow_redirects=False
         )
@@ -1204,10 +1197,9 @@ def test_delete_expense_creates_notification(client, app):
 def test_group_member_sees_deletion_notification(client, app):
     """Test that group members see deletion notification banner."""
     # Arrange
-    from extensions import db
-    from models import Expense, GroupNotification
 
-    import json
+    from extensions import db
+    from models import GroupNotification
 
     payer = User(email="payer@example.com")
     viewer = User(email="viewer@example.com")
@@ -1250,10 +1242,9 @@ def test_group_member_sees_deletion_notification(client, app):
 def test_notification_with_null_read_by(client, app):
     """Test that notification works when read_by is None."""
     # Arrange
+
     from extensions import db
     from models import GroupNotification
-
-    import json
 
     payer = User(email="payer@example.com")
     viewer = User(email="viewer@example.com")
@@ -1293,10 +1284,10 @@ def test_notification_with_null_read_by(client, app):
 def test_notification_not_shown_after_read(client, app):
     """Test that notification is not shown after user marks it as read."""
     # Arrange
+    import json
+
     from extensions import db
     from models import GroupNotification
-
-    import json
 
     payer = User(email="payer@example.com")
     viewer = User(email="viewer@example.com")
@@ -1337,10 +1328,10 @@ def test_notification_not_shown_after_read(client, app):
 def test_mark_notification_read_with_null_read_by(client, app):
     """Test marking notification as read when read_by is None."""
     # Arrange
+    import json
+
     from extensions import db
     from models import GroupNotification
-
-    import json
 
     payer = User(email="payer@example.com")
     viewer = User(email="viewer@example.com")
@@ -1384,10 +1375,10 @@ def test_mark_notification_read_with_null_read_by(client, app):
 def test_mark_notification_read_already_read(client, app):
     """Test that marking already-read notification doesn't add duplicate."""
     # Arrange
+    import json
+
     from extensions import db
     from models import GroupNotification
-
-    import json
 
     payer = User(email="payer@example.com")
     viewer = User(email="viewer@example.com")
@@ -1431,10 +1422,10 @@ def test_mark_notification_read_already_read(client, app):
 def test_mark_notification_read(client, app):
     """Test that marking notification as read works."""
     # Arrange
+    import json
+
     from extensions import db
     from models import GroupNotification
-
-    import json
 
     payer = User(email="payer@example.com")
     viewer = User(email="viewer@example.com")
@@ -1478,10 +1469,10 @@ def test_mark_notification_read(client, app):
 def test_mark_notification_read_requires_membership(client, app):
     """Test that only group members can mark notifications as read."""
     # Arrange
+    import json
+
     from extensions import db
     from models import GroupNotification
-
-    import json
 
     payer = User(email="payer@example.com")
     non_member = User(email="nonmember@example.com")
@@ -1581,9 +1572,7 @@ def test_mark_notification_read_notification_not_found(client, app):
         sess["user_email"] = user.email
 
     # Act - try to mark non-existent notification as read
-    response = client.post(
-        f"/groups/{group.id}/notification/99999/read", follow_redirects=False
-    )
+    response = client.post(f"/groups/{group.id}/notification/99999/read", follow_redirects=False)
 
     # Assert - should redirect
     assert response.status_code == 302
@@ -2130,6 +2119,7 @@ def test_create_expense_with_category(client, app):
     """Test creating expense with category."""
     # Arrange
     from datetime import date
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
@@ -2176,6 +2166,7 @@ def test_create_expense_without_category(client, app):
     """Test creating expense without category (optional field)."""
     # Arrange
     from datetime import date
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
@@ -2221,6 +2212,7 @@ def test_create_expense_expense_date_auto_set(client, app):
     """Test that expense_date is automatically set to today when creating expense."""
     # Arrange
     from datetime import date
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
@@ -2267,6 +2259,7 @@ def test_edit_expense_with_category(client, app):
     """Test editing expense to add/update category."""
     # Arrange
     from datetime import date
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
@@ -2331,6 +2324,7 @@ def test_edit_expense_change_category(client, app):
     """Test editing expense to change category."""
     # Arrange
     from datetime import date
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
@@ -2396,6 +2390,7 @@ def test_edit_expense_clear_category(client, app):
     """Test editing expense to clear category (set to None)."""
     # Arrange
     from datetime import date
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
@@ -2460,12 +2455,12 @@ def test_edit_expense_clear_category(client, app):
 def test_edit_expense_updates_database(client, app):
     """Test that editing expense updates the database correctly."""
     # Arrange
+    import json
+
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
     from models import Expense
-
-    import json
 
     payer = User(email="payer@example.com")
     editor = User(email="editor@example.com")
@@ -2591,7 +2586,7 @@ def test_group_member_sees_edit_notification(client, app):
     from werkzeug.datastructures import MultiDict
 
     from extensions import db
-    from models import Expense, GroupNotification
+    from models import Expense
 
     payer = User(email="payer@example.com")
     editor = User(email="editor@example.com")
@@ -2653,8 +2648,8 @@ def test_group_member_sees_edit_notification(client, app):
 def test_edit_expense_sends_notifications(client, app):
     """Test that editing expense sends terminal notifications to other members."""
     # Arrange
-    from unittest.mock import patch
     from io import StringIO
+    from unittest.mock import patch
 
     from werkzeug.datastructures import MultiDict
 
@@ -2703,7 +2698,9 @@ def test_edit_expense_sends_notifications(client, app):
     output = StringIO()
     with patch("sys.stdout", output):
         response = client.post(
-            f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+            f"/groups/{group.id}/expense/{expense_id}/edit",
+            data=expense_data,
+            follow_redirects=False,
         )
 
     printed_output = output.getvalue()
@@ -2720,8 +2717,8 @@ def test_edit_expense_sends_notifications(client, app):
 def test_edit_expense_no_notification_to_editor(client, app):
     """Test that editor does not receive terminal notification."""
     # Arrange
-    from unittest.mock import patch
     from io import StringIO
+    from unittest.mock import patch
 
     from werkzeug.datastructures import MultiDict
 
@@ -2769,7 +2766,9 @@ def test_edit_expense_no_notification_to_editor(client, app):
     output = StringIO()
     with patch("sys.stdout", output):
         response = client.post(
-            f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+            f"/groups/{group.id}/expense/{expense_id}/edit",
+            data=expense_data,
+            follow_redirects=False,
         )
 
     printed_output = output.getvalue()
@@ -2830,7 +2829,9 @@ def test_edit_expense_handles_notification_error(client, app):
     )
     with patch("routes.groups.notify_expense_edited", side_effect=Exception("Notification error")):
         response = client.post(
-            f"/groups/{group.id}/expense/{expense_id}/edit", data=expense_data, follow_redirects=False
+            f"/groups/{group.id}/expense/{expense_id}/edit",
+            data=expense_data,
+            follow_redirects=False,
         )
 
     # Assert - Expense should still be updated and notification should be created
@@ -3494,12 +3495,14 @@ def test_edit_expense_group_not_found_error(client, app):
     assert response.status_code == 200
     assert b"Group not found" in response.data
 
+    # ==== TEST LEAVE GROUP ====
 
-    #==== TEST LEAVE GROUP ====
+
 def test_leave_group_success(client, app):
     """Test that a group member can successfully leave a group."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     leaver = User(email="leaver@example.com")
     db.session.add_all([creator, leaver])
@@ -3526,6 +3529,7 @@ def test_leave_group_creator_cannot_leave(client, app):
     """Test that the group creator cannot leave the group."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     member = User(email="member@example.com")
     db.session.add_all([creator, member])
@@ -3551,6 +3555,7 @@ def test_leave_group_requires_login(client, app):
     """Test that unauthenticated users cannot leave a group."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     member = User(email="member@example.com")
     db.session.add_all([creator, member])
@@ -3572,6 +3577,7 @@ def test_leave_group_requires_membership(client, app):
     """Test that non-members cannot leave a group."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     non_member = User(email="nonmember@example.com")
     db.session.add_all([creator, non_member])
@@ -3597,6 +3603,7 @@ def test_leave_group_not_found(client, app):
     """Test leaving a non-existent group returns error."""
     # Arrange
     from extensions import db
+
     user = User(email="user@example.com")
     db.session.add(user)
     db.session.commit()
@@ -3614,6 +3621,7 @@ def test_leave_group_redirects_to_groups_list(client, app):
     """Test that after leaving, user is redirected to /groups/."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     leaver = User(email="leaver@example.com")
     db.session.add_all([creator, leaver])
@@ -3636,6 +3644,7 @@ def test_leave_group_shows_success_message(client, app):
     """Test that a flash message confirms successful leave."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     leaver = User(email="leaver@example.com")
     db.session.add_all([creator, leaver])
@@ -3658,6 +3667,7 @@ def test_leave_group_removes_only_leaver(client, app):
     """Test that only the leaving user is removed from the group."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     leaver = User(email="leaver@example.com")
     other = User(email="other@example.com")
@@ -3684,6 +3694,7 @@ def test_leave_group_last_member_except_creator(client, app):
     """Test that a group with only creator + one member allows leaving."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     leaver = User(email="leaver@example.com")
     db.session.add_all([creator, leaver])
@@ -3709,6 +3720,7 @@ def test_leave_group_user_not_found_defensive(client, app):
     """Test defensive handling when user is deleted mid-session."""
     # Arrange
     from extensions import db
+
     creator = User(email="creator@example.com")
     leaver = User(email="leaver@example.com")
     db.session.add_all([creator, leaver])
@@ -3730,4 +3742,3 @@ def test_leave_group_user_not_found_defensive(client, app):
     # Group should still exist, leaver already gone
     updated_group = db.session.get(Group, group.id)
     assert creator in updated_group.members
-

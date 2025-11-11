@@ -37,10 +37,7 @@ class DashboardService:
         # Query expenses where payer matches user's email OR display_name
         # Need to check both because expenses can be stored with either
         expenses = Expense.query.filter(
-            db.or_(
-                Expense.payer == user.email,
-                Expense.payer == user.display_name
-            )
+            db.or_(Expense.payer == user.email, Expense.payer == user.display_name)
         ).all()
         total_expenses = sum(e.amount for e in expenses)
 

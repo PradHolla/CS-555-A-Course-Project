@@ -644,6 +644,9 @@ function updateSplitCalculations(expenseId) {
                 <div class="border-l-4 border-emerald-200 pl-4 py-3 bg-gray-50 rounded-r-lg">
                     <div class="flex items-start justify-between mb-1">
                         <div class="flex items-center gap-2">
+                            {% if comment_user %}
+                                {{ user_avatar(comment_user, size='w-8 h-8') }}
+                            {% endif %}
                             <span class="font-semibold text-gray-900 text-sm">
                                 {{ email_to_name.get(commenter_email, commenter_email) if commenter_email else 'Unknown User' }}
                             </span>

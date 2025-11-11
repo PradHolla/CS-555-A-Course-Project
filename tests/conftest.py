@@ -28,6 +28,9 @@ def app(tmp_path):
         Flask application configured for testing
     """
     db_path = tmp_path / "test.db"
+    upload_path = tmp_path / "uploads" / "profile_pics"
+    upload_path.mkdir(parents=True, exist_ok=True)
+
     flask_app.config.update(
         TESTING=True,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{db_path}",
@@ -36,6 +39,8 @@ def app(tmp_path):
         MAIL_SUPPRESS_SEND=True,  # Don't actually send emails in tests
         MAIL_DEFAULT_SENDER="test@sprintpay.local",
         EMAIL_ENABLED=False,  # Always use detailed notification logging in tests
+        # File upload configuration - use temporary directory for tests
+        UPLOAD_FOLDER=str(upload_path),
     )
 
     with flask_app.app_context():
@@ -100,3 +105,17 @@ def create_user_with_group(name, member_names, created_by_email="creator@example
     db.session.commit()
 
     return group, creator, members
+
+
+@pytest.fixture
+def auth_user(app):
+    """
+    Create an authenticated user for testing.
+
+    Returns:
+        User: A persisted user instance
+    """
+    user = User(email="testuser@example.com", display_name="Test User")
+    db.session.add(user)
+    db.session.commit()
+    return user

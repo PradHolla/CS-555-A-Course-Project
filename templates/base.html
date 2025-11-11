@@ -1,3 +1,61 @@
+{% macro user_avatar(user, size='w-10 h-10', show_name=False) %}
+    {% if user and user.profile_picture %}
+        <div class="flex items-center gap-2">
+            <img src="{{ url_for('static', filename='uploads/profile_pics/' ~ user.profile_picture) }}"
+                 alt="{{ user.display_name or user.email }}"
+                 class="rounded-full {{ size }} object-cover border-2 border-gray-200 shadow-sm">
+            {% if show_name %}
+                <span class="text-sm font-medium text-gray-700">{{ user.display_name or user.email }}</span>
+            {% endif %}
+        </div>
+    {% elif user %}
+        {% set initials = ((user.display_name or user.email).split()[0][0] + (user.display_name or user.email).split()[1][0] if (user.display_name or user.email).split()|length > 1 else (user.display_name or user.email)[:2]).upper() %}
+        {% set colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500'] %}
+        {% set color = colors[user.id % 6] %}
+        <div class="flex items-center gap-2">
+            <div class="{{ size }} rounded-full {{ color }} flex items-center justify-center text-white font-semibold text-sm shadow-sm border-2 border-white">
+                {{ initials }}
+            </div>
+            {% if show_name %}
+                <span class="text-sm font-medium text-gray-700">{{ user.display_name or user.email }}</span>
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="{{ size }} rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold text-sm">
+            ?
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro group_avatar(group, size='w-10 h-10', show_name=False) %}
+    {% if group and group.profile_picture %}
+        <div class="flex items-center gap-2">
+            <img src="{{ url_for('static', filename='uploads/group_pics/' ~ group.profile_picture) }}"
+                 alt="{{ group.name }}"
+                 class="rounded-lg {{ size }} object-cover border-2 border-emerald-200 shadow-sm">
+            {% if show_name %}
+                <span class="text-sm font-medium text-gray-700">{{ group.name }}</span>
+            {% endif %}
+        </div>
+    {% elif group %}
+        {% set initials = group.name[:2].upper() %}
+        {% set colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500'] %}
+        {% set color = colors[group.id % 6] %}
+        <div class="flex items-center gap-2">
+            <div class="{{ size }} rounded-lg {{ color }} flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-emerald-100">
+                {{ initials }}
+            </div>
+            {% if show_name %}
+                <span class="text-sm font-medium text-gray-700">{{ group.name }}</span>
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="{{ size }} rounded-lg bg-gray-300 flex items-center justify-center text-white font-bold text-sm">
+            ?
+        </div>
+    {% endif %}
+{% endmacro %}
+
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
 <head>
@@ -52,15 +110,16 @@
                     {% endif %}
                     {% if session.get('user_email') %}
                     <div class="flex items-center gap-3 ml-4 pl-4 border-l border-gray-200">
-                        <a href="{{ url_for('profile.view_profile') }}" class="px-4 py-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-all duration-200">
-                            <span class="flex items-center gap-2">
+                        <a href="{{ url_for('profile.view_profile') }}" class="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-all duration-200">
+                            {% if current_user %}
+                                {{ user_avatar(current_user, size='w-8 h-8') }}
+                            {% else %}
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                 </svg>
-                                Profile
-                            </span>
+                            {% endif %}
+                            <span class="text-sm font-medium">{{ current_user.display_name if current_user and current_user.display_name else session.get('user_email') }}</span>
                         </a>
-                        <span class="text-sm text-gray-600">{{ session.get('user_email') }}</span>
                         <a href="/auth/logout" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all duration-200">
                             Logout
                         </a>

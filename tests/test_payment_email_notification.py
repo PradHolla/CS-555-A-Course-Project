@@ -1,7 +1,7 @@
 """
 Tests for Payment Confirmation Email Notification feature.
 
-User Story: As a user, I want to receive an email notification when someone 
+User Story: As a user, I want to receive an email notification when someone
 records a payment to me, so I can verify the transaction immediately.
 
 Acceptance Criteria:
@@ -12,7 +12,7 @@ Acceptance Criteria:
 ✔ Then I am redirected to the payment details page
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from extensions import db
 from models import Settlement, User
@@ -20,9 +20,9 @@ from models import Settlement, User
 
 def test_payment_email_includes_all_required_fields(client, app):
     """
-    Test that payment confirmation email includes payer name, amount, 
+    Test that payment confirmation email includes payer name, amount,
     timestamp, and link to payment details.
-    
+
     Definition of Done:
     - Email includes payer name, amount, and timestamp
     - Redirection link works and opens correct transaction
@@ -39,7 +39,7 @@ def test_payment_email_includes_all_required_fields(client, app):
         sess["user_id"] = payer_id
 
     with patch("services.notification_service._send_or_log_email") as mock_send:
-        response = client.post(
+        client.post(
             "/settlements",
             data={
                 "amount": "500.00",
@@ -52,15 +52,15 @@ def test_payment_email_includes_all_required_fields(client, app):
         # Assert email was sent
         assert mock_send.called
         call_args = mock_send.call_args
-        
+
         # Verify recipient
         assert call_args[0][0] == "john@example.com"
-        
+
         # Verify subject contains payer name and amount
         subject = call_args[0][1]
         assert "Neha" in subject
         assert "$500.00" in subject
-        
+
         # Verify body contains all required fields
         body = call_args[0][2]
         assert "Neha" in body
@@ -72,7 +72,7 @@ def test_payment_email_includes_all_required_fields(client, app):
 
 def test_email_enabled_flag_controls_actual_sending(app):
     """
-    Test that EMAIL_ENABLED config flag controls whether emails are 
+    Test that EMAIL_ENABLED config flag controls whether emails are
     actually sent or just logged.
     """
     with app.app_context():
@@ -81,18 +81,15 @@ def test_email_enabled_flag_controls_actual_sending(app):
             recipient = User(email="bob@example.com")
             db.session.add_all([payer, recipient])
             db.session.commit()
-            
+
             settlement = Settlement(
-                amount=250.00,
-                payer_id=payer.id,
-                recipient_id=recipient.id,
-                note="Test payment"
+                amount=250.00, payer_id=payer.id, recipient_id=recipient.id, note="Test payment"
             )
             db.session.add(settlement)
             db.session.commit()
-            
+
             from services.notification_service import notify_settlement_recipient
-            
+
             # Test with EMAIL_ENABLED = False (should log to terminal)
             app.config["EMAIL_ENABLED"] = False
             with patch("builtins.print") as mock_print:
@@ -113,23 +110,19 @@ def test_email_enabled_true_sends_actual_email(app):
             recipient = User(email="diana@example.com")
             db.session.add_all([payer, recipient])
             db.session.commit()
-            
-            settlement = Settlement(
-                amount=100.00,
-                payer_id=payer.id,
-                recipient_id=recipient.id
-            )
+
+            settlement = Settlement(amount=100.00, payer_id=payer.id, recipient_id=recipient.id)
             db.session.add(settlement)
             db.session.commit()
-            
+
             from services.notification_service import notify_settlement_recipient
-            
+
             # Test with EMAIL_ENABLED = True (should send email)
             app.config["EMAIL_ENABLED"] = True
             with patch("services.notification_service.mail.send") as mock_mail_send:
                 notify_settlement_recipient(settlement)
                 assert mock_mail_send.called
-                
+
                 # Verify Message object was created correctly
                 msg = mock_mail_send.call_args[0][0]
                 assert msg.recipients == ["diana@example.com"]
@@ -147,25 +140,22 @@ def test_email_html_body_formatted_correctly(app):
             recipient = User(email="frank@example.com")
             db.session.add_all([payer, recipient])
             db.session.commit()
-            
+
             settlement = Settlement(
-                amount=750.50,
-                payer_id=payer.id,
-                recipient_id=recipient.id,
-                note="Utilities split"
+                amount=750.50, payer_id=payer.id, recipient_id=recipient.id, note="Utilities split"
             )
             db.session.add(settlement)
             db.session.commit()
-            
+
             from services.notification_service import notify_settlement_recipient
-            
+
             app.config["EMAIL_ENABLED"] = True
             with patch("services.notification_service.mail.send") as mock_mail_send:
                 notify_settlement_recipient(settlement)
-                
+
                 msg = mock_mail_send.call_args[0][0]
                 html_body = msg.html
-                
+
                 # Verify HTML contains all required elements
                 assert "Eve" in html_body
                 assert "$750.50" in html_body
@@ -178,7 +168,7 @@ def test_email_html_body_formatted_correctly(app):
 def test_email_link_redirects_to_correct_payment_details(client, app):
     """
     Test that clicking the email link redirects to the correct payment details page.
-    
+
     Acceptance Criteria:
     ✔ Given I click the link in the email
     ✔ Then I am redirected to the payment details page
@@ -188,12 +178,8 @@ def test_email_link_redirects_to_correct_payment_details(client, app):
         recipient = User(email="henry@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
-        
-        settlement = Settlement(
-            amount=300.00,
-            payer_id=payer.id,
-            recipient_id=recipient.id
-        )
+
+        settlement = Settlement(amount=300.00, payer_id=payer.id, recipient_id=recipient.id)
         db.session.add(settlement)
         db.session.commit()
         settlement_id = settlement.id
@@ -204,7 +190,7 @@ def test_email_link_redirects_to_correct_payment_details(client, app):
         sess["user_id"] = recipient_id
 
     response = client.get(f"/settlements/{settlement_id}")
-    
+
     # Assert page loads successfully
     assert response.status_code == 200
     assert b"grace@example.com" in response.data
@@ -214,7 +200,7 @@ def test_email_link_redirects_to_correct_payment_details(client, app):
 def test_email_sent_on_settlement_creation(client, app):
     """
     Test that email notification is triggered when settlement is saved.
-    
+
     Acceptance Criteria:
     ✔ Given a member settles a payment to me
     ✔ When the transaction is saved
@@ -243,7 +229,7 @@ def test_email_sent_on_settlement_creation(client, app):
 
         # Assert settlement was created
         assert response.status_code == 302
-        
+
         # Assert email was sent
         assert mock_send.called
         assert mock_send.call_args[0][0] == "jack@example.com"
@@ -252,7 +238,7 @@ def test_email_sent_on_settlement_creation(client, app):
 def test_terminal_output_format_when_email_disabled(app):
     """
     Test that terminal output is properly formatted when EMAIL_ENABLED is false.
-    
+
     During local testing, email content should be printed to terminal
     with clear formatting.
     """
@@ -262,26 +248,23 @@ def test_terminal_output_format_when_email_disabled(app):
             recipient = User(email="leo@example.com")
             db.session.add_all([payer, recipient])
             db.session.commit()
-            
+
             settlement = Settlement(
-                amount=125.75,
-                payer_id=payer.id,
-                recipient_id=recipient.id,
-                note="Lunch"
+                amount=125.75, payer_id=payer.id, recipient_id=recipient.id, note="Lunch"
             )
             db.session.add(settlement)
             db.session.commit()
-            
+
             from services.notification_service import notify_settlement_recipient
-            
+
             app.config["EMAIL_ENABLED"] = False
             with patch("builtins.print") as mock_print:
                 notify_settlement_recipient(settlement)
-                
+
                 # Verify terminal output is formatted
                 printed_calls = [str(call) for call in mock_print.call_args_list]
                 printed_output = " ".join(printed_calls)
-                
+
                 assert "EMAIL NOTIFICATION" in printed_output
                 assert "To: leo@example.com" in printed_output
                 assert "Subject:" in printed_output
@@ -301,36 +284,35 @@ def test_email_error_handling(app):
             recipient = User(email="nathan@example.com")
             db.session.add_all([payer, recipient])
             db.session.commit()
-            
-            settlement = Settlement(
-                amount=200.00,
-                payer_id=payer.id,
-                recipient_id=recipient.id
-            )
+
+            settlement = Settlement(amount=200.00, payer_id=payer.id, recipient_id=recipient.id)
             db.session.add(settlement)
             db.session.commit()
-            
+
             from services.notification_service import notify_settlement_recipient
-            
+
             app.config["EMAIL_ENABLED"] = True
-            
+
             # Simulate email sending failure
             with patch("services.notification_service.mail.send") as mock_mail_send:
                 mock_mail_send.side_effect = Exception("SMTP connection failed")
-                
+
                 with patch("builtins.print") as mock_print:
                     # Should not raise exception
                     notify_settlement_recipient(settlement)
-                    
+
                     # Should log error
                     printed_output = " ".join(str(call) for call in mock_print.call_args_list)
-                    assert "Failed to send email" in printed_output or "SMTP connection failed" in printed_output
+                    assert (
+                        "Failed to send email" in printed_output
+                        or "SMTP connection failed" in printed_output
+                    )
 
 
 def test_multiple_payments_send_separate_emails(client, app):
     """
     Test that multiple settlements send separate email notifications.
-    
+
     Definition of Done:
     - Feature tested with multiple group members
     """
@@ -370,7 +352,7 @@ def test_multiple_payments_send_separate_emails(client, app):
 
         # Assert two separate emails were sent
         assert mock_send.call_count == 2
-        
+
         # Verify each email went to correct recipient
         call_args_list = [call[0] for call in mock_send.call_args_list]
         recipients = [args[0] for args in call_args_list]

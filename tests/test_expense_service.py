@@ -347,7 +347,7 @@ def test_calculate_detailed_breakdown_with_multiple_expenses(app):
     # From expense2: Alice->Bob $20, Charlie->Bob $20
     # Total: 4 debt transactions
     assert len(breakdown) == 4
-    
+
     # Check all transactions exist
     transactions = [
         {k: v for k, v in t.items() if k in ["from", "to", "amount", "expense_description"]}
@@ -442,4 +442,3 @@ def test_calculate_detailed_breakdown_with_percentage_split(app):
     assert {"from": "charlie@test.com", "to": "alice@test.com", "amount": 40.0} in [
         {k: v for k, v in t.items() if k in ["from", "to", "amount"]} for t in breakdown
     ]
-

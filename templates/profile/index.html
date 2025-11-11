@@ -59,6 +59,74 @@
             </div>
         </div>
 
+        <!-- Profile Picture Section -->
+        <div class="p-6 border-b border-cyan-500/20">
+            <h4 class="text-sm font-mono text-cyan-400 mb-4 uppercase tracking-wider">Profile Picture</h4>
+            <div class="flex items-center gap-6">
+                <!-- Current/Preview Profile Picture -->
+                <div class="flex-shrink-0">
+                    <div id="pictureContainer">
+                        {% if user.profile_picture %}
+                            <img id="currentPicture"
+                                 src="{{ url_for('static', filename='uploads/profile_pics/' + user.profile_picture) }}" 
+                                 alt="Profile Picture" 
+                                 class="w-24 h-24 rounded-full border-4 border-cyan-500/30 object-cover">
+                        {% else %}
+                            <div id="currentPicture" class="w-24 h-24 rounded-full border-4 border-cyan-500/30 bg-gradient-to-br from-cyan-500/20 to-teal-500/20 flex items-center justify-center">
+                                <span class="text-3xl font-bold text-cyan-400">
+                                    {% if user.display_name %}
+                                        {{ user.display_name[:2].upper() }}
+                                    {% else %}
+                                        {{ user.email[:2].upper() }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <!-- File Info (shown below picture when file selected) -->
+                    <div id="imageInfo" class="hidden mt-2 text-xs text-gray-400"></div>
+                </div>
+
+                <!-- Upload/Delete Controls -->
+                <div class="flex-1">
+                    <form id="uploadForm" method="POST" action="{{ url_for('profile.upload_picture') }}" enctype="multipart/form-data" class="space-y-3">
+                        <div>
+                            <input type="file" 
+                                   name="profile_picture" 
+                                   id="profile_picture" 
+                                   accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                                   onchange="previewProfileImage(this)"
+                                   class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30 file:cursor-pointer cursor-pointer">
+                            <p class="text-xs text-gray-500 mt-1">JPG, PNG, GIF, or WebP. Max 5MB.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="submit" 
+                                    id="uploadBtn"
+                                    class="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-all duration-200 text-sm font-semibold border border-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Upload Picture
+                            </button>
+                            <button type="button" 
+                                    id="clearBtn"
+                                    onclick="clearProfilePreview()" 
+                                    class="hidden px-4 py-2 bg-gray-500/20 text-gray-400 rounded-lg hover:bg-gray-500/30 transition-all duration-200 text-sm font-semibold border border-gray-500/30">
+                                Clear Selection
+                            </button>
+                            {% if user.profile_picture %}
+                            <button type="button" 
+                                    onclick="document.getElementById('deleteForm').submit()" 
+                                    class="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-all duration-200 text-sm font-semibold border border-red-500/30">
+                                Remove Picture
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                    {% if user.profile_picture %}
+                    <form id="deleteForm" method="POST" action="{{ url_for('profile.delete_picture') }}" style="display: none;"></form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <!-- Profile Form -->
         <form method="POST" action="{{ url_for('profile.update_profile') }}" class="p-6 space-y-6">
             <!-- Email (Read-only) -->
@@ -112,4 +180,106 @@
         </form>
     </div>
 </div>
+
+<script>
+    let originalProfileHTML = null; // Store original HTML for restoration
+    
+    function previewProfileImage(input) {
+        const pictureContainer = document.getElementById('pictureContainer');
+        const imageInfo = document.getElementById('imageInfo');
+        const clearBtn = document.getElementById('clearBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            
+            // Validate file type
+            const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+            if (!validTypes.includes(file.type)) {
+                alert('Please select a valid image file (PNG, JPG, JPEG, GIF, or WEBP)');
+                clearProfilePreview();
+                return;
+            }
+            
+            // Validate file size (5MB limit)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                alert('File size must be less than 5MB');
+                clearProfilePreview();
+                return;
+            }
+            
+            // Store original HTML if not already stored
+            if (originalProfileHTML === null) {
+                originalProfileHTML = pictureContainer.innerHTML;
+            }
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                // Create an image to get dimensions
+                const img = new Image();
+                img.onload = function() {
+                    // Replace current picture with preview (blue border to indicate it's a preview)
+                    pictureContainer.innerHTML = `
+                        <img id="currentPicture" 
+                             src="${e.target.result}" 
+                             alt="Preview" 
+                             class="w-24 h-24 rounded-full border-4 border-blue-400 object-cover">
+                    `;
+                    
+                    // Show file info below picture
+                    const sizeKB = (file.size / 1024).toFixed(2);
+                    imageInfo.innerHTML = `
+                        <strong>File:</strong> ${file.name}<br>
+                        <strong>Size:</strong> ${sizeKB} KB<br>
+                        <strong>Dimensions:</strong> ${img.width} × ${img.height}px
+                    `;
+                    imageInfo.classList.remove('hidden');
+                    
+                    // Show clear button and enable upload
+                    clearBtn.classList.remove('hidden');
+                    uploadBtn.disabled = false;
+                };
+                img.src = e.target.result;
+            };
+            
+            reader.readAsDataURL(file);
+        } else {
+            clearProfilePreview();
+        }
+    }
+    
+    function clearProfilePreview() {
+        const input = document.getElementById('profile_picture');
+        const pictureContainer = document.getElementById('pictureContainer');
+        const imageInfo = document.getElementById('imageInfo');
+        const clearBtn = document.getElementById('clearBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        
+        // Clear the file input
+        input.value = '';
+        
+        // Restore original picture if we have it
+        if (originalProfileHTML !== null) {
+            pictureContainer.innerHTML = originalProfileHTML;
+            originalProfileHTML = null;
+        }
+        
+        // Hide file info and clear button
+        imageInfo.classList.add('hidden');
+        imageInfo.innerHTML = '';
+        clearBtn.classList.add('hidden');
+        uploadBtn.disabled = true;
+    }
+    
+    // Disable upload button on page load if no file selected
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('profile_picture');
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (!input.value) {
+            uploadBtn.disabled = true;
+        }
+    });
+</script>
 {% endblock %}

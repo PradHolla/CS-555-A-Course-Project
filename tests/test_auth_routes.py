@@ -161,7 +161,7 @@ def test_logout_clears_session(client, app):
 
 def test_verify_otp_does_not_auto_accept_pending_invitations(client, app):
     """Test that verifying OTP does NOT auto-accept pending group invitations.
-    
+
     Users must manually accept invitations via the /invitations page.
     """
     # Arrange

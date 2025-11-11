@@ -23,6 +23,11 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+    # File upload configuration
+    app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "static", "uploads", "profile_pics")
+    app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB max file size
+    app.config["ALLOWED_EXTENSIONS"] = {"jpg", "jpeg", "png", "gif", "webp"}
+
     # Email configuration
     app.config["MAIL_SERVER"] = "smtp.gmail.com"
     app.config["MAIL_PORT"] = 587
@@ -31,7 +36,7 @@ def create_app():
     app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "your-password")
     app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "your-email@gmail.com")
     app.config["MAIL_SUPPRESS_SEND"] = False  # Always allow email sending (OTP needs this)
-    
+
     # Payment notification email control: Set EMAIL_ENABLED=true in .env to send actual payment emails
     # When false, payment notifications are logged to terminal instead
     # Note: OTP emails are always sent regardless of this setting
@@ -62,6 +67,17 @@ def create_app():
     app.register_blueprint(profile_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(invitations_bp)
+
+    # Context processor to make current_user available in all templates
+    @app.context_processor
+    def inject_current_user():
+        from flask import session as flask_session
+
+        user_id = flask_session.get("user_id")
+        current_user = None
+        if user_id:
+            current_user = db.session.get(User, user_id)
+        return dict(current_user=current_user)
 
     return app
 

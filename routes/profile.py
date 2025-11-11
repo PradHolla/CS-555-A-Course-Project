@@ -4,6 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 
 from extensions import db
 from models import User
+from services.profile_service import delete_profile_picture, save_profile_picture
 from utils.decorators import login_required
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/profile")
@@ -16,7 +17,11 @@ def view_profile():
     user_id = session.get("user_id")
     user = db.session.get(User, user_id)
     # User existence is guaranteed by @login_required decorator
-    return render_template("profile/index.html", user=user)
+    from services.profile_service import get_profile_picture_url
+
+    return render_template(
+        "profile/index.html", user=user, get_profile_picture_url=get_profile_picture_url
+    )
 
 
 @profile_bp.route("/", methods=["POST"])
@@ -45,5 +50,54 @@ def update_profile():
     except Exception as e:
         db.session.rollback()
         flash(f"Failed to update profile: {str(e)}", "error")
+
+    return redirect(url_for("profile.view_profile"))
+
+
+@profile_bp.route("/upload-picture", methods=["POST"])
+@login_required
+def upload_picture():
+    """Upload a profile picture."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+    # User existence is guaranteed by @login_required decorator
+
+    # Check if file was uploaded
+    if "profile_picture" not in request.files:
+        flash("No file selected", "error")
+        return redirect(url_for("profile.view_profile"))
+
+    file = request.files["profile_picture"]
+
+    # Check if filename is empty
+    if file.filename == "":
+        flash("No file selected", "error")
+        return redirect(url_for("profile.view_profile"))
+
+    # Save the profile picture
+    success, message = save_profile_picture(user, file)
+
+    if success:
+        flash(message, "success")
+    else:
+        flash(message, "error")
+
+    return redirect(url_for("profile.view_profile"))
+
+
+@profile_bp.route("/delete-picture", methods=["POST"])
+@login_required
+def delete_picture():
+    """Delete the user's profile picture."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+    # User existence is guaranteed by @login_required decorator
+
+    success, message = delete_profile_picture(user)
+
+    if success:
+        flash(message, "success")
+    else:
+        flash(message, "error")
 
     return redirect(url_for("profile.view_profile"))

@@ -1,7 +1,5 @@
 """Unit tests for dashboard service."""
 
-import pytest
-
 from extensions import db
 from models import Expense, Settlement, User
 from services.dashboard_service import DashboardService

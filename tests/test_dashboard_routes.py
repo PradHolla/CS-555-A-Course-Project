@@ -318,9 +318,7 @@ def test_dashboard_handles_database_error(client, app, monkeypatch):
     def mock_get_user_summary(user_id):
         raise Exception("Database connection error")
 
-    monkeypatch.setattr(
-        "routes.dashboard.DashboardService.get_user_summary", mock_get_user_summary
-    )
+    monkeypatch.setattr("routes.dashboard.DashboardService.get_user_summary", mock_get_user_summary)
 
     # Act
     response = client.get("/dashboard")
@@ -349,9 +347,7 @@ def test_dashboard_json_error_response(client, app, monkeypatch):
     def mock_get_user_summary(user_id):
         raise Exception("Database connection error")
 
-    monkeypatch.setattr(
-        "routes.dashboard.DashboardService.get_user_summary", mock_get_user_summary
-    )
+    monkeypatch.setattr("routes.dashboard.DashboardService.get_user_summary", mock_get_user_summary)
 
     # Act
     response = client.get("/dashboard", headers={"Accept": "application/json"})
