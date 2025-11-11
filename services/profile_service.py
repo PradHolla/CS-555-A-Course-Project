@@ -1,6 +1,7 @@
 """Service layer for profile picture management."""
 
 import base64
+import html
 import os
 import uuid
 
@@ -90,6 +91,19 @@ def save_profile_picture(user, file):
 
         # Save the file
         file.save(filepath)
+
+        # Validate that it's actually an image by trying to open it
+        try:
+            with Image.open(filepath) as img:
+                img.verify()  # Verify it's a valid image
+            # Reopen for processing (verify() closes the file)
+            with Image.open(filepath) as img:
+                pass  # Just checking we can open it again
+        except Exception as e:
+            # If it's not a valid image, delete it and return error
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return False, f"Invalid image file: {str(e)}"
 
         # Resize the image
         resize_image(filepath)
@@ -187,12 +201,16 @@ def generate_default_avatar(user):
         ]
         color = colors[user.id % len(colors)]
 
+    # Sanitize values for SVG (prevent XSS)
+    safe_initials = html.escape(initials)
+    safe_color = html.escape(color)
+
     # Create SVG data URI
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-        <rect width="200" height="200" fill="{color}"/>
+        <rect width="200" height="200" fill="{safe_color}"/>
         <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
               font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white">
-            {initials}
+            {safe_initials}
         </text>
     </svg>"""
 

@@ -489,8 +489,8 @@ class TestProfilePictureImageProcessing:
             follow_redirects=True,
         )
 
-        # Should show error message
-        assert b"Error uploading file" in response.data or b"error" in response.data.lower()
+        # Should show error message - our validation catches invalid images
+        assert b"Invalid image file" in response.data or b"error" in response.data.lower()
 
     def test_delete_profile_picture_with_oserror(self, client, auth_user, app, monkeypatch):
         """Test delete continues even if file removal fails."""
