@@ -1,6 +1,7 @@
 """Main Flask application with blueprint registration."""
 
 import os
+import sqlite3
 
 from dotenv import load_dotenv
 from flask import Flask
@@ -15,7 +16,7 @@ from models import Expense, Settlement, User  # noqa: F401
 load_dotenv()
 
 
-def create_app():
+def create_app(test_config=None):
     """Application factory pattern."""
     app = Flask(__name__)
 
@@ -45,6 +46,11 @@ def create_app():
     app.config["EMAIL_ENABLED"] = email_enabled
 
     # Initialize extensions
+    # Apply test overrides when provided (used by tests to change DB URI etc.)
+    if test_config:
+        app.config.update(test_config)
+
+    # Initialize extensions after config is finalized
     db.init_app(app)
     mail.init_app(app)
 
@@ -89,19 +95,27 @@ def init_db(app):
         db.create_all()
         # Ensure new nullable columns exist on legacy sqlite DBs (no-op if already present)
         try:
-            # Check user table for profile_picture
-            result = db.session.execute(text("PRAGMA table_info('user')")).fetchall()
-            existing = [row[1] for row in result]
-            if 'profile_picture' not in existing:
-                db.session.execute(text("ALTER TABLE user ADD COLUMN profile_picture VARCHAR(200)"))
+            uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            # Only attempt sqlite-file adjustments
+            if uri and uri.startswith("sqlite:///"):
+                db_file = uri.replace("sqlite:///", "", 1)
+                # Use sqlite3 directly to avoid SQLAlchemy connection/transaction nuances
+                conn = sqlite3.connect(db_file)
+                cur = conn.cursor()
 
-            # Check group table for profile_picture
-            result = db.session.execute(text("PRAGMA table_info('group')")).fetchall()
-            existing = [row[1] for row in result]
-            if 'profile_picture' not in existing:
-                db.session.execute(text("ALTER TABLE 'group' ADD COLUMN profile_picture VARCHAR(200)"))
+                cur.execute("PRAGMA table_info('user')")
+                user_cols = [row[1] for row in cur.fetchall()]
+                if 'profile_picture' not in user_cols:
+                    cur.execute('ALTER TABLE user ADD COLUMN profile_picture VARCHAR(200)')
 
-            db.session.commit()
+                cur.execute("PRAGMA table_info('group')")
+                group_cols = [row[1] for row in cur.fetchall()]
+                if 'profile_picture' not in group_cols:
+                    # group is a reserved word; quote it with double quotes for SQLite
+                    cur.execute('ALTER TABLE "group" ADD COLUMN profile_picture VARCHAR(200)')
+
+                conn.commit()
+                conn.close()
         except Exception as e:
             # If the DB engine doesn't support ALTER or PRAGMA for some reason, don't crash startup.
             print(f"Schema adjustment skipped: {e}")
