@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
@@ -14,6 +14,7 @@ from services.notification_service import (
 )
 from utils.decorators import login_required
 from utils.validators import is_valid_email
+from sqlalchemy import func
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/groups")
 
@@ -32,6 +33,145 @@ def list_groups():
     # Get groups the user is a member of
     groups = user.groups.order_by(Group.created_at.desc()).all()
     return render_template("groups/index.html", groups=groups)
+
+
+@groups_bp.route("/trend")
+@login_required
+def trend():
+    """Show a simple expense trend per payer across the user's groups.
+
+    This aggregates expenses by payer and month for the last 6 months and
+    renders a small table showing monthly totals and a row total per payer.
+    """
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("dashboard.index"))
+
+    # Get the groups the user belongs to (IDs)
+    group_ids = [g.id for g in user.groups]
+
+    # Build last N months labels (YYYY-MM), include current month
+    months_to_show = 6
+    today = date.today()
+    months = []
+    y = today.year
+    m = today.month
+    for i in range(months_to_show):
+        months.append((y, m))
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    # Reverse to chronological order
+    months = list(reversed(months))
+    month_labels = [f"{y:04d}-{m:02d}" for (y, m) in months]
+
+    # If user is not member of any groups, show empty data
+    rows = []
+
+    # Prepare month totals (summing across payers) and category aggregates
+    month_totals_map = {lbl: 0.0 for lbl in month_labels}
+    category_map = {}  # category -> {count, amount}
+
+    if group_ids:
+        # Query sums grouped by payer and month (for per-payer table)
+        month_label = func.strftime("%Y-%m", Expense.expense_date)
+        per_payer_q = (
+            db.session.query(Expense.payer.label("payer"), month_label.label("month"), func.sum(Expense.amount).label("total"))
+            .filter(Expense.group_id.in_(group_ids))
+            .group_by(Expense.payer, month_label)
+            .all()
+        )
+
+        # Transform into nested dict payer -> {month: total}
+        data = {}
+        for payer, month, total in per_payer_q:
+            if payer not in data:
+                data[payer] = {lbl: 0.0 for lbl in month_labels}
+            data[payer][month] = float(total or 0.0)
+            # also add to month_totals_map
+            if month in month_totals_map:
+                month_totals_map[month] += float(total or 0.0)
+
+        # Build per-payer rows
+        payers = list(data.keys())
+        users = User.query.filter(User.email.in_(payers)).all() if payers else []
+        name_map = {u.email: (u.display_name or u.email) for u in users}
+
+        for payer, month_map in data.items():
+            total = sum(month_map.get(lbl, 0.0) for lbl in month_labels)
+            rows.append({"payer": payer, "display_name": name_map.get(payer, payer), "months": month_map, "total": total})
+
+        rows.sort(key=lambda r: r["total"], reverse=True)
+
+        # Category aggregates: count and sum per category
+        cat_q = (
+            db.session.query(Expense.category.label("category"), func.count(Expense.id).label("count"), func.sum(Expense.amount).label("amount"))
+            .filter(Expense.group_id.in_(group_ids))
+            .group_by(Expense.category)
+            .all()
+        )
+
+        for category, cnt, amt in cat_q:
+            label = category if category else "Uncategorized"
+            category_map[label] = {"count": int(cnt or 0), "amount": float(amt or 0.0)}
+
+    # Compute highest and lowest months (based on month_totals_map)
+    month_totals = [month_totals_map.get(lbl, 0.0) for lbl in month_labels]
+    if month_totals:
+        # Highest - pick the month with the maximum total; if tie, first occurance
+        max_val = max(month_totals)
+        min_val = min(month_totals)
+        max_index = month_totals.index(max_val)
+        min_index = month_totals.index(min_val)
+        month_highest_label = month_labels[max_index]
+        month_highest_total = max_val
+        month_lowest_label = month_labels[min_index]
+        month_lowest_total = min_val
+    else:
+        month_highest_label = None
+        month_highest_total = 0.0
+        month_lowest_label = None
+        month_lowest_total = 0.0
+
+    # Determine category most frequent and category with highest total amount
+    category_labels = []
+    category_counts = []
+    category_amounts = []
+    category_most_freq = None
+    category_highest_amount = None
+
+    if category_map:
+        for lbl, info in category_map.items():
+            category_labels.append(lbl)
+            category_counts.append(info["count"])
+            category_amounts.append(info["amount"])
+
+        # most frequent = max by count
+        most_freq_idx = category_counts.index(max(category_counts))
+        category_most_freq = category_labels[most_freq_idx]
+        # highest amount
+        highest_amt_idx = category_amounts.index(max(category_amounts))
+        category_highest_amount = category_labels[highest_amt_idx]
+
+    return render_template(
+        "groups/trend.html",
+        months=month_labels,
+        rows=rows,
+        month_totals=month_totals,
+        month_highest_label=month_highest_label,
+        month_highest_total=month_highest_total,
+        month_lowest_label=month_lowest_label,
+        month_lowest_total=month_lowest_total,
+        category_labels=category_labels,
+        category_counts=category_counts,
+        category_amounts=category_amounts,
+        category_most_freq=category_most_freq,
+        category_highest_amount=category_highest_amount,
+    )
 
 
 @groups_bp.route("/create", methods=["GET", "POST"])

@@ -98,6 +98,12 @@
                             Groups
                         </span>
                     </a>
+                    <a href="{{ url_for('groups.trend') }}" class="px-4 py-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gradient-to-r hover:from-yellow-50 hover:to-orange-50 transition-all duration-200">
+                        <span class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17a1 1 0 01-1-1v-4a1 1 0 112 0v4a1 1 0 01-1 1zM17 11a1 1 0 011-1h.01a1 1 0 110 2H18a1 1 0 01-1-1zM7 13a1 1 0 011-1h.01a1 1 0 110 2H8a1 1 0 01-1-1z"></path></svg>
+                            Trend
+                        </span>
+                    </a>
                     {% if session.get('user_email') %}
                     <a href="{{ url_for('invitations.list_invitations') }}" class="px-4 py-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-all duration-200">
                         <span class="flex items-center gap-2">
