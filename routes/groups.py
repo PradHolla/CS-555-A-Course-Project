@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone, datetime
+from datetime import date, datetime, timezone
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
