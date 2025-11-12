@@ -19,7 +19,7 @@ class User(db.Model):
     email = db.Column(db.String(200), nullable=False, unique=True)
     otp = db.Column(db.String(6), nullable=True)
     otp_expiry = db.Column(db.DateTime, nullable=True)
-    profile_picture = db.Column(db.String(255), nullable=True)  # Filename for profile picture
+    profile_picture = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Many-to-many relationship with Groups
@@ -94,7 +94,7 @@ class Settlement(db.Model):
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    profile_picture = db.Column(db.String(255), nullable=True)  # Filename for group picture
+    profile_picture = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_by_id = db.Column(
         db.Integer, db.ForeignKey("user.id"), nullable=False

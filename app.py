@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask
 
 from extensions import db, mail
+from sqlalchemy import text
 
 # Import models to ensure they're registered with SQLAlchemy
 from models import Expense, Settlement, User  # noqa: F401
@@ -86,6 +87,24 @@ def init_db(app):
     """Initialize database tables."""
     with app.app_context():
         db.create_all()
+        # Ensure new nullable columns exist on legacy sqlite DBs (no-op if already present)
+        try:
+            # Check user table for profile_picture
+            result = db.session.execute(text("PRAGMA table_info('user')")).fetchall()
+            existing = [row[1] for row in result]
+            if 'profile_picture' not in existing:
+                db.session.execute(text("ALTER TABLE user ADD COLUMN profile_picture VARCHAR(200)"))
+
+            # Check group table for profile_picture
+            result = db.session.execute(text("PRAGMA table_info('group')")).fetchall()
+            existing = [row[1] for row in result]
+            if 'profile_picture' not in existing:
+                db.session.execute(text("ALTER TABLE 'group' ADD COLUMN profile_picture VARCHAR(200)"))
+
+            db.session.commit()
+        except Exception as e:
+            # If the DB engine doesn't support ALTER or PRAGMA for some reason, don't crash startup.
+            print(f"Schema adjustment skipped: {e}")
 
 
 # Create app instance
