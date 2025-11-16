@@ -43,6 +43,13 @@ def create_app():
     email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
     app.config["EMAIL_ENABLED"] = email_enabled
 
+    # Reminder system configuration
+    app.config["REMINDER_ENABLED"] = (
+        os.environ.get("REMINDER_ENABLED", "true").lower() == "true"
+    )
+    app.config["REMINDER_DAYS_THRESHOLD"] = int(os.environ.get("REMINDER_DAYS_THRESHOLD", "7"))
+    app.config["APP_URL"] = os.environ.get("APP_URL", "http://localhost:5000")
+
     # Initialize extensions
     db.init_app(app)
     mail.init_app(app)
