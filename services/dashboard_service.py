@@ -46,30 +46,40 @@ class DashboardService:
         all_expenses = Expense.query.all()
         
         for expense in all_expenses:
-            # Check if user is involved in this expense
-            if not expense.split_details:
-                continue
-                
-            if user_email in expense.split_details or (user_display_name and user_display_name in expense.split_details):
+            # If user is the payer, they are owed money (positive)
+            if expense.payer == user_email or expense.payer == user_display_name:
+                # Check if there are split details
+                if expense.split_details:
+                    try:
+                        split_details = json.loads(expense.split_details)
+                        
+                        # Find user's share
+                        user_share = 0.0
+                        for participant, amount in split_details.items():
+                            if participant == user_email or (user_display_name and participant == user_display_name):
+                                user_share = float(amount)
+                                break
+                        
+                        # User paid the full amount but only owes their share
+                        # So they are owed: (total - their_share)
+                        net_balance += (expense.amount - user_share)
+                    except (json.JSONDecodeError, ValueError, KeyError):
+                        # If split_details is invalid, assume user is owed the full amount
+                        net_balance += expense.amount
+                else:
+                    # No split details, user is owed the full amount
+                    net_balance += expense.amount
+            elif expense.split_details:
+                # User is not the payer, check if they owe money
                 try:
                     split_details = json.loads(expense.split_details)
                     
                     # Find user's share
-                    user_share = 0.0
                     for participant, amount in split_details.items():
                         if participant == user_email or (user_display_name and participant == user_display_name):
-                            user_share = float(amount)
+                            # User didn't pay but owes their share (negative)
+                            net_balance -= float(amount)
                             break
-                    
-                    # If user is the payer, they are owed money (positive)
-                    if expense.payer == user_email or expense.payer == user_display_name:
-                        # User paid the full amount but only owes their share
-                        # So they are owed: (total - their_share)
-                        net_balance += (expense.amount - user_share)
-                    else:
-                        # User didn't pay but owes their share (negative)
-                        net_balance -= user_share
-                        
                 except (json.JSONDecodeError, ValueError, KeyError):
                     continue
         
