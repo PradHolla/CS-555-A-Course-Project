@@ -224,3 +224,126 @@ def test_get_user_summary_uses_email_fallback(app):
         # Verify expense is included
         assert summary["total_expenses"] == 50.00
         assert summary["has_data"] is True
+
+
+
+def test_get_user_summary_with_invalid_split_details(app):
+    """Test get_user_summary handles invalid JSON in split_details."""
+    with app.app_context():
+        user = User(email="user@example.com", display_name="User")
+        db.session.add(user)
+        db.session.commit()
+
+        # Create expense with invalid JSON in split_details
+        expense = Expense(
+            description="Bad JSON",
+            amount=100.00,
+            payer="user@example.com",
+            split_type="equal",
+            split_details="{invalid json}"
+        )
+        db.session.add(expense)
+        db.session.commit()
+
+        # Should handle gracefully and assume user is owed full amount
+        summary = DashboardService.get_user_summary(user.id)
+
+        assert summary["total_expenses"] == 100.00
+        assert summary["outstanding_balance"] == 100.00
+
+
+def test_get_user_summary_as_participant_with_invalid_json(app):
+    """Test get_user_summary when user is participant with invalid JSON."""
+    with app.app_context():
+        user = User(email="user@example.com", display_name="User")
+        payer = User(email="payer@example.com", display_name="Payer")
+        db.session.add_all([user, payer])
+        db.session.commit()
+
+        # Create expense where user is not payer, with invalid JSON
+        expense = Expense(
+            description="Bad JSON",
+            amount=100.00,
+            payer="payer@example.com",
+            split_type="equal",
+            split_details="{invalid}"
+        )
+        db.session.add(expense)
+        db.session.commit()
+
+        # Should handle gracefully
+        summary = DashboardService.get_user_summary(user.id)
+
+        # User didn't pay and JSON is invalid, so balance should be 0
+        assert summary["outstanding_balance"] == 0.00
+
+
+def test_get_user_summary_with_no_split_details(app):
+    """Test get_user_summary when expense has no split_details."""
+    with app.app_context():
+        user = User(email="user@example.com", display_name="User")
+        db.session.add(user)
+        db.session.commit()
+
+        # Create expense without split_details
+        expense = Expense(
+            description="No split",
+            amount=50.00,
+            payer="user@example.com",
+            split_type="equal",
+            split_details=None
+        )
+        db.session.add(expense)
+        db.session.commit()
+
+        summary = DashboardService.get_user_summary(user.id)
+
+        # User paid full amount with no split, so they're owed full amount
+        assert summary["total_expenses"] == 50.00
+        assert summary["outstanding_balance"] == 50.00
+
+
+def test_get_user_summary_complex_scenario(app):
+    """Test get_user_summary with complex multi-user scenario."""
+    with app.app_context():
+        user = User(email="user@example.com", display_name="User")
+        other1 = User(email="other1@example.com", display_name="Other1")
+        other2 = User(email="other2@example.com", display_name="Other2")
+        db.session.add_all([user, other1, other2])
+        db.session.commit()
+
+        # User paid an expense
+        expense1 = Expense(
+            description="User paid",
+            amount=90.00,
+            payer="user@example.com",
+            split_type="equal",
+            split_details='{"user@example.com": 30.0, "other1@example.com": 30.0, "other2@example.com": 30.0}'
+        )
+        
+        # Other1 paid an expense
+        expense2 = Expense(
+            description="Other1 paid",
+            amount=60.00,
+            payer="other1@example.com",
+            split_type="equal",
+            split_details='{"user@example.com": 20.0, "other1@example.com": 20.0, "other2@example.com": 20.0}'
+        )
+        
+        db.session.add_all([expense1, expense2])
+        db.session.commit()
+
+        # User made a settlement
+        settlement = Settlement(amount=15.00, payer_id=user.id, recipient_id=other1.id)
+        db.session.add(settlement)
+        db.session.commit()
+
+        summary = DashboardService.get_user_summary(user.id)
+
+        # User paid 90, owes 30 from their share = +60
+        # User owes 20 from other1's expense = -20
+        # User paid settlement of 15 = -15
+        # Net: 60 - 20 - 15 = 25
+        assert summary["total_expenses"] == 90.00
+        assert summary["total_payments"] == 15.00
+        assert summary["outstanding_balance"] == 25.00

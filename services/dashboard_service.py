@@ -93,8 +93,8 @@ class DashboardService:
         settlements = Settlement.query.filter_by(payer_id=user_id).all()
         total_payments = sum(s.amount for s in settlements)
         
-        # Adjust net balance for settlements made
-        net_balance += total_payments
+        # Adjust net balance for settlements made (subtract because user paid out)
+        net_balance -= total_payments
 
         # Determine if user has any data
         has_data = len(all_expenses) > 0 or len(settlements) > 0

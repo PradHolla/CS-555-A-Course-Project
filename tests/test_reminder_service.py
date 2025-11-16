@@ -1,9 +1,15 @@
 """Unit tests for ReminderService."""
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
+# Set test environment variables before importing app
+os.environ["MAIL_USERNAME"] = "test@example.com"
+os.environ["MAIL_PASSWORD"] = "test_password"
+os.environ["EMAIL_ENABLED"] = "false"
 
 from app import create_app
 from extensions import db
@@ -17,6 +23,7 @@ def app():
     app = create_app()
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app.config["WTF_CSRF_ENABLED"] = False
     
     with app.app_context():
         db.create_all()
@@ -270,3 +277,216 @@ class TestSendReminders:
             assert result["reminders_sent"] == 0
             assert len(result["users_notified"]) == 0
             assert len(result["errors"]) == 0
+
+
+class TestSendRemindersIntegration:
+    """Integration tests for send_reminders method."""
+
+    def test_send_reminders_success(self, app):
+        """Test successful reminder sending."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Old expense",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            result = ReminderService.send_reminders(7)
+            
+            assert result["reminders_sent"] == 1
+            assert "debtor@example.com" in result["users_notified"]
+            assert len(result["errors"]) == 0
+
+    def test_send_reminders_multiple_users(self, app):
+        """Test sending reminders to multiple users."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            debtor1 = create_test_user("debtor1@example.com", "Debtor1")
+            debtor2 = create_test_user("debtor2@example.com", "Debtor2")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor1@example.com": 50.0},
+                description="Expense 1",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor2@example.com": 50.0},
+                description="Expense 2",
+                amount=100.0,
+                days_ago=15
+            )
+            
+            result = ReminderService.send_reminders(7)
+            
+            assert result["reminders_sent"] == 2
+            assert "debtor1@example.com" in result["users_notified"]
+            assert "debtor2@example.com" in result["users_notified"]
+
+    def test_send_reminders_with_threshold(self, app):
+        """Test reminder threshold filtering."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Recent expense",
+                amount=100.0,
+                days_ago=5
+            )
+            
+            # Should not send with 7 day threshold
+            result = ReminderService.send_reminders(7)
+            assert result["reminders_sent"] == 0
+            
+            # Should send with 3 day threshold
+            result = ReminderService.send_reminders(3)
+            assert result["reminders_sent"] == 1
+
+
+class TestBalanceBreakdownEdgeCases:
+    """Edge case tests for balance breakdown."""
+
+    def test_breakdown_with_same_creditor_multiple_expenses(self, app):
+        """Test breakdown aggregates multiple expenses from same creditor."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 30.0, "debtor@example.com": 30.0},
+                description="Expense 1",
+                amount=60.0,
+                days_ago=10
+            )
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 20.0, "debtor@example.com": 20.0},
+                description="Expense 2",
+                amount=40.0,
+                days_ago=10
+            )
+            
+            breakdown = ReminderService.get_balance_breakdown(debtor.id)
+            
+            assert len(breakdown) == 1
+            assert breakdown[0]["creditor"] == "creditor@example.com"
+            assert breakdown[0]["amount"] == 50.0  # 30 + 20
+
+    def test_breakdown_sorted_by_amount(self, app):
+        """Test breakdown is sorted by amount descending."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor1 = create_test_user("creditor1@example.com", "Creditor1")
+            creditor2 = create_test_user("creditor2@example.com", "Creditor2")
+            creditor3 = create_test_user("creditor3@example.com", "Creditor3")
+            
+            create_test_expense(
+                payer="creditor1@example.com",
+                split_details={"creditor1@example.com": 25.0, "debtor@example.com": 25.0},
+                description="Expense 1",
+                amount=50.0,
+                days_ago=10
+            )
+            
+            create_test_expense(
+                payer="creditor2@example.com",
+                split_details={"creditor2@example.com": 75.0, "debtor@example.com": 75.0},
+                description="Expense 2",
+                amount=150.0,
+                days_ago=10
+            )
+            
+            create_test_expense(
+                payer="creditor3@example.com",
+                split_details={"creditor3@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Expense 3",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            breakdown = ReminderService.get_balance_breakdown(debtor.id)
+            
+            assert len(breakdown) == 3
+            assert breakdown[0]["amount"] == 75.0
+            assert breakdown[1]["amount"] == 50.0
+            assert breakdown[2]["amount"] == 25.0
+
+    def test_breakdown_user_not_found(self, app):
+        """Test breakdown with non-existent user."""
+        with app.app_context():
+            breakdown = ReminderService.get_balance_breakdown(99999)
+            
+            assert len(breakdown) == 0
+
+
+
+class TestErrorHandling:
+    """Tests for error handling in reminder service."""
+
+    def test_calculate_balance_age_with_exception(self, app):
+        """Test calculate_balance_age handles exceptions gracefully."""
+        with app.app_context():
+            # Test with invalid user_id type should not crash
+            days, oldest_date = ReminderService.calculate_balance_age(None)
+            
+            # Should return default values
+            assert days == 0
+            assert oldest_date is None
+
+    def test_get_balance_breakdown_with_invalid_json(self, app):
+        """Test balance breakdown handles invalid JSON in split_details."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Create expense with invalid JSON
+            expense = Expense(
+                description="Bad JSON",
+                amount=100.0,
+                payer="creditor@example.com",
+                split_type="equal",
+                split_details="{invalid json}",
+                created_at=datetime.now(timezone.utc),
+                expense_date=datetime.now(timezone.utc).date(),
+            )
+            db.session.add(expense)
+            db.session.commit()
+            
+            # Should not crash, just skip the invalid expense
+            breakdown = ReminderService.get_balance_breakdown(debtor.id)
+            
+            # Should return empty since JSON is invalid
+            assert isinstance(breakdown, list)
+
+    def test_send_reminders_with_no_breakdown(self, app):
+        """Test send_reminders skips users with no balance breakdown."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            # Create user with no expenses (no breakdown)
+            user = create_test_user("user@example.com", "User")
+            
+            result = ReminderService.send_reminders(7)
+            
+            # Should not send any reminders
+            assert result["reminders_sent"] == 0
+            assert isinstance(result["errors"], list)

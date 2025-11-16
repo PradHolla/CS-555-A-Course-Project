@@ -364,5 +364,6 @@ This is an automated reminder from your expense splitting application.
         logger.info(f"Payment reminder sent to {user.email} for ${total_amount:.2f}")
 
     except Exception as e:
-        logger.error(f"Failed to send payment reminder to {user.email}: {str(e)}")
+        user_email = user.email if user and hasattr(user, 'email') else 'unknown'
+        logger.error(f"Failed to send payment reminder to {user_email}: {str(e)}")
         raise
