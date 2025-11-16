@@ -214,3 +214,14 @@ CLAUDE.md
 # Uploaded files (keep directory structure with .gitkeep)
 static/uploads/profile_pics/*
 !static/uploads/profile_pics/.gitkeep
+
+# Testing and debug files
+debug_*.py
+check_*.py
+make_*.py
+test_reminder_system.py
+create_test_data.py
+fix_database.py
+add_group_profile_picture.py
+TESTING_CHECKLIST.md
+instance/app_backup.db

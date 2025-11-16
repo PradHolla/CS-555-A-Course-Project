@@ -242,3 +242,128 @@ def notify_expense_edited(expense, editor_email, group_members):
     for member in group_members:
         if member.email != editor_email:
             _send_or_log_email(member.email, subject, body, html_body)
+
+
+def send_payment_reminder(user, balance_amount, days_outstanding, balance_breakdown):
+    """
+    Send payment reminder email to user with outstanding balance.
+
+    Args:
+        user: User object with email and display_name
+        balance_amount: Negative balance amount (how much user owes)
+        days_outstanding: Number of days balance has been outstanding
+        balance_breakdown: List of dicts with creditor and amount
+    """
+    try:
+        # Validate inputs
+        if not user or not user.email:
+            raise ValueError("Invalid user object")
+        if not balance_breakdown:
+            raise ValueError("Balance breakdown is required")
+        if days_outstanding < 0:
+            raise ValueError("Days outstanding must be non-negative")
+
+        user_name = user.display_name or user.email
+        total_amount = abs(balance_amount)  # Convert negative to positive for display
+        
+        # Generate balance page URL (works without request context)
+        balance_url = current_app.config.get("APP_URL", "http://localhost:5000") + "/balance-summary"
+
+        # Create subject line
+        subject = f"Payment Reminder: Outstanding Balance of ${total_amount:.2f}"
+
+        # Create balance summary text
+        breakdown_text = "\n".join(
+            [f"  • {debt['creditor']}: ${debt['amount']:.2f}" for debt in balance_breakdown]
+        )
+
+        # Create plain text email body
+        plain_body = f"""Hi {user_name},
+
+This is a friendly reminder that you have an outstanding balance of ${total_amount:.2f}.
+
+This balance has been outstanding for {days_outstanding} days.
+
+Balance Breakdown:
+{breakdown_text}
+
+Please settle your balance at your earliest convenience.
+
+You can view your detailed balance and make payments at: {balance_url}
+
+This is an automated reminder from your expense splitting application.
+"""
+
+        # Create HTML email body
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                  color: white; padding: 20px; border-radius: 8px; text-align: center; }}
+        .content {{ background: #f9f9f9; padding: 25px; margin: 20px 0; border-radius: 8px; }}
+        .amount {{ font-size: 28px; font-weight: bold; color: #e53e3e; text-align: center; margin: 20px 0; }}
+        .breakdown {{ background: white; padding: 20px; margin: 20px 0; border-radius: 8px;
+                     border-left: 4px solid #667eea; }}
+        .breakdown-item {{ padding: 8px 0; border-bottom: 1px solid #eee; }}
+        .breakdown-item:last-child {{ border-bottom: none; }}
+        .button {{ background: #667eea; color: white; padding: 15px 30px;
+                  text-decoration: none; border-radius: 8px; display: inline-block;
+                  font-weight: bold; margin: 20px 0; }}
+        .footer {{ color: #666; font-size: 12px; text-align: center; margin-top: 30px; }}
+        .days-badge {{ background: #fed7d7; color: #c53030; padding: 5px 10px;
+                      border-radius: 15px; font-size: 14px; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>💰 Payment Reminder</h2>
+        </div>
+
+        <div class="content">
+            <p>Hi <strong>{user_name}</strong>,</p>
+
+            <p>This is a friendly reminder that you have an outstanding balance:</p>
+
+            <div class="amount">${total_amount:.2f}</div>
+
+            <p style="text-align: center;">
+                <span class="days-badge">{days_outstanding} days outstanding</span>
+            </p>
+
+            <div class="breakdown">
+                <h3 style="margin-top: 0; color: #667eea;">💳 Balance Breakdown:</h3>
+                {''.join([f'<div class="breakdown-item"><strong>{debt["creditor"]}</strong>: ${debt["amount"]:.2f}</div>' for debt in balance_breakdown])}
+            </div>
+
+            <p>Please settle your balance at your earliest convenience to keep your account in good standing.</p>
+
+            <div style="text-align: center;">
+                <a href="{balance_url}" class="button">
+                    📊 View Balance Details & Pay
+                </a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated reminder from your expense splitting application.</p>
+            <p>If you have questions, please contact your group administrator.</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+        # Send email using existing notification infrastructure
+        _send_or_log_email(
+            to_email=user.email, subject=subject, body=plain_body, html_body=html_body
+        )
+
+        logger.info(f"Payment reminder sent to {user.email} for ${total_amount:.2f}")
+
+    except Exception as e:
+        user_email = user.email if user and hasattr(user, 'email') else 'unknown'
+        logger.error(f"Failed to send payment reminder to {user_email}: {str(e)}")
+        raise

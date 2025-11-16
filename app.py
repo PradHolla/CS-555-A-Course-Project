@@ -45,6 +45,13 @@ def create_app(test_config=None):
     email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
     app.config["EMAIL_ENABLED"] = email_enabled
 
+    # Reminder system configuration
+    app.config["REMINDER_ENABLED"] = (
+        os.environ.get("REMINDER_ENABLED", "true").lower() == "true"
+    )
+    app.config["REMINDER_DAYS_THRESHOLD"] = int(os.environ.get("REMINDER_DAYS_THRESHOLD", "7"))
+    app.config["APP_URL"] = os.environ.get("APP_URL", "http://localhost:5000")
+
     # Initialize extensions
     # Apply test overrides when provided (used by tests to change DB URI etc.)
     if test_config:

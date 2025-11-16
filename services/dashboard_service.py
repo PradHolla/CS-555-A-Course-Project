@@ -20,10 +20,12 @@ class DashboardService:
             {
                 'total_expenses': float,       # Sum of expenses where user is payer
                 'total_payments': float,       # Sum of settlements where user is payer
-                'outstanding_balance': float,  # total_expenses - total_payments
+                'outstanding_balance': float,  # Net balance (positive = owed to user, negative = user owes)
                 'has_data': bool              # True if any financial data exists
             }
         """
+        import json
+        
         # Get user object to determine payer identifier
         user = db.session.get(User, user_id)
         if not user:
@@ -34,8 +36,54 @@ class DashboardService:
                 "has_data": False,
             }
 
-        # Query expenses where payer matches user's email OR display_name
-        # Need to check both because expenses can be stored with either
+        user_email = user.email
+        user_display_name = user.display_name
+        
+        # Calculate net balance across all expenses
+        net_balance = 0.0
+        
+        # Get all expenses
+        all_expenses = Expense.query.all()
+        
+        for expense in all_expenses:
+            # If user is the payer, they are owed money (positive)
+            if expense.payer == user_email or expense.payer == user_display_name:
+                # Check if there are split details
+                if expense.split_details:
+                    try:
+                        split_details = json.loads(expense.split_details)
+                        
+                        # Find user's share
+                        user_share = 0.0
+                        for participant, amount in split_details.items():
+                            if participant == user_email or (user_display_name and participant == user_display_name):
+                                user_share = float(amount)
+                                break
+                        
+                        # User paid the full amount but only owes their share
+                        # So they are owed: (total - their_share)
+                        net_balance += (expense.amount - user_share)
+                    except (json.JSONDecodeError, ValueError, KeyError):
+                        # If split_details is invalid, assume user is owed the full amount
+                        net_balance += expense.amount
+                else:
+                    # No split details, user is owed the full amount
+                    net_balance += expense.amount
+            elif expense.split_details:
+                # User is not the payer, check if they owe money
+                try:
+                    split_details = json.loads(expense.split_details)
+                    
+                    # Find user's share
+                    for participant, amount in split_details.items():
+                        if participant == user_email or (user_display_name and participant == user_display_name):
+                            # User didn't pay but owes their share (negative)
+                            net_balance -= float(amount)
+                            break
+                except (json.JSONDecodeError, ValueError, KeyError):
+                    continue
+        
+        # Query expenses where payer matches user (for total_expenses display)
         expenses = Expense.query.filter(
             db.or_(Expense.payer == user.email, Expense.payer == user.display_name)
         ).all()
@@ -44,17 +92,17 @@ class DashboardService:
         # Query settlements where payer_id matches user_id
         settlements = Settlement.query.filter_by(payer_id=user_id).all()
         total_payments = sum(s.amount for s in settlements)
-
-        # Calculate outstanding balance
-        outstanding_balance = total_expenses - total_payments
+        
+        # Adjust net balance for settlements made (subtract because user paid out)
+        net_balance -= total_payments
 
         # Determine if user has any data
-        has_data = len(expenses) > 0 or len(settlements) > 0
+        has_data = len(all_expenses) > 0 or len(settlements) > 0
 
         # Return summary with values rounded to 2 decimal places
         return {
             "total_expenses": round(total_expenses, 2),
             "total_payments": round(total_payments, 2),
-            "outstanding_balance": round(outstanding_balance, 2),
+            "outstanding_balance": round(net_balance, 2),
             "has_data": has_data,
         }
