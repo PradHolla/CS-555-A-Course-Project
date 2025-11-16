@@ -47,6 +47,9 @@ class DashboardService:
         
         for expense in all_expenses:
             # Check if user is involved in this expense
+            if not expense.split_details:
+                continue
+                
             if user_email in expense.split_details or (user_display_name and user_display_name in expense.split_details):
                 try:
                     split_details = json.loads(expense.split_details)
