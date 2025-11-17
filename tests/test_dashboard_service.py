@@ -13,38 +13,46 @@ def test_get_user_summary_with_data(app):
         db.session.add(user)
         db.session.flush()
 
-        # Create expenses where user is payer
-        expense1 = Expense(
-            description="Lunch",
-            amount=50.00,
-            payer=user.display_name,
-            split_type="equal",
-        )
-        expense2 = Expense(
-            description="Dinner",
-            amount=75.50,
-            payer=user.display_name,
-            split_type="equal",
-        )
-        db.session.add_all([expense1, expense2])
-
-        # Create settlements where user is payer
+        # Create other user
         other_user = User(email="other@example.com", display_name="Other User")
         db.session.add(other_user)
         db.session.flush()
 
-        settlement1 = Settlement(amount=30.00, payer_id=user.id, recipient_id=other_user.id)
-        settlement2 = Settlement(amount=20.25, payer_id=user.id, recipient_id=other_user.id)
+        # User paid $50 for lunch, split equally - other owes user $25
+        expense1 = Expense(
+            description="Lunch",
+            amount=50.00,
+            payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
+            split_type="equal",
+        )
+        # User paid $75.50 for dinner, split equally - other owes user $37.75
+        expense2 = Expense(
+            description="Dinner",
+            amount=75.50,
+            payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
+            split_type="equal",
+        )
+        db.session.add_all([expense1, expense2])
+        db.session.flush()
+
+        # Other user pays user back $50.25 total
+        settlement1 = Settlement(amount=30.00, payer_id=other_user.id, recipient_id=user.id)
+        settlement2 = Settlement(amount=20.25, payer_id=other_user.id, recipient_id=user.id)
         db.session.add_all([settlement1, settlement2])
         db.session.commit()
 
         # Get summary
         summary = DashboardService.get_user_summary(user.id)
 
-        # Verify totals
+        # User's outstanding balance:
+        # - Was owed: $25 + $37.75 = $62.75
+        # - Received payments: $50.25
+        # - Still owed: $62.75 - $50.25 = $12.50
         assert summary["total_expenses"] == 125.50
-        assert summary["total_payments"] == 50.25
-        assert summary["outstanding_balance"] == 75.25
+        assert summary["total_payments"] == 0.0  # User didn't make any payments
+        assert summary["outstanding_balance"] == 12.50
         assert summary["has_data"] is True
 
 
@@ -67,18 +75,25 @@ def test_get_user_summary_no_data(app):
 
 
 def test_get_user_summary_only_expenses(app):
-    """Test get_user_summary with only expenses."""
+    """Test get_user_summary with only expenses (user paid, hasn't been paid back yet)."""
     with app.app_context():
         # Create test user
         user = User(email="testuser@example.com", display_name="Test User")
         db.session.add(user)
         db.session.flush()
 
-        # Create expenses only
+        # Create another user to participate
+        other_user = User(email="other@example.com", display_name="Other")
+        db.session.add(other_user)
+        db.session.flush()
+
+        # User paid $100 for groceries, split with other_user
+        # So other_user owes user $50
         expense = Expense(
             description="Groceries",
             amount=100.00,
             payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
             split_type="equal",
         )
         db.session.add(expense)
@@ -87,37 +102,49 @@ def test_get_user_summary_only_expenses(app):
         # Get summary
         summary = DashboardService.get_user_summary(user.id)
 
-        # Verify outstanding_balance equals total_expenses
+        # User is owed $50 (paid $100, their share is $50, so they're owed $50)
         assert summary["total_expenses"] == 100.00
         assert summary["total_payments"] == 0.0
-        assert summary["outstanding_balance"] == 100.00
+        assert summary["outstanding_balance"] == 50.00  # User is owed $50
         assert summary["has_data"] is True
 
 
 def test_get_user_summary_only_payments(app):
-    """Test get_user_summary with only payments."""
+    """Test get_user_summary when user only makes payments (settling debts from someone else's expense)."""
     with app.app_context():
-        # Create test user
+        # Create test user (Bob)
         user = User(email="testuser@example.com", display_name="Test User")
         db.session.add(user)
         db.session.flush()
 
-        # Create other user and settlement
+        # Create other user (Alice) who paid for an expense
         other_user = User(email="recipient@example.com", display_name="Recipient")
         db.session.add(other_user)
         db.session.flush()
 
+        # Alice paid $100, split with Bob - so Bob owes $50
+        expense = Expense(
+            description="Shared expense",
+            amount=100.00,
+            payer=other_user.email,
+            participants=f"{other_user.email}, {user.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.flush()
+
+        # Bob pays Alice $50 to settle
         settlement = Settlement(amount=50.00, payer_id=user.id, recipient_id=other_user.id)
         db.session.add(settlement)
         db.session.commit()
 
-        # Get summary
+        # Get summary for Bob
         summary = DashboardService.get_user_summary(user.id)
 
-        # Verify negative outstanding_balance
-        assert summary["total_expenses"] == 0.0
-        assert summary["total_payments"] == 50.00
-        assert summary["outstanding_balance"] == -50.00
+        # Bob's outstanding balance should be 0 (he owed $50, paid $50)
+        assert summary["total_expenses"] == 0.0  # Bob didn't pay for the expense
+        assert summary["total_payments"] == 50.00  # Bob paid $50
+        assert summary["outstanding_balance"] == 0.0  # Debt is settled
         assert summary["has_data"] is True
 
 
@@ -129,37 +156,44 @@ def test_get_user_summary_decimal_precision(app):
         db.session.add(user)
         db.session.flush()
 
-        # Create expenses with decimal amounts
+        # Create other user
+        other_user = User(email="other@example.com", display_name="Other")
+        db.session.add(other_user)
+        db.session.flush()
+
+        # User paid expenses, split equally
         expense1 = Expense(
             description="Coffee",
             amount=3.333,
             payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
             split_type="equal",
         )
         expense2 = Expense(
             description="Snack",
             amount=2.777,
             payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
             split_type="equal",
         )
         db.session.add_all([expense1, expense2])
-
-        # Create settlement with decimal amount
-        other_user = User(email="other@example.com", display_name="Other")
-        db.session.add(other_user)
         db.session.flush()
 
-        settlement = Settlement(amount=1.555, payer_id=user.id, recipient_id=other_user.id)
+        # Other user pays back partial amount
+        settlement = Settlement(amount=1.555, payer_id=other_user.id, recipient_id=user.id)
         db.session.add(settlement)
         db.session.commit()
 
         # Get summary
         summary = DashboardService.get_user_summary(user.id)
 
-        # Verify 2 decimal place rounding
+        # User's outstanding balance:
+        # - Was owed: (3.333 + 2.777) / 2 = 3.055
+        # - Received payment: 1.555
+        # - Still owed: 3.055 - 1.555 = 1.50
         assert summary["total_expenses"] == 6.11  # 3.333 + 2.777 = 6.11
-        assert summary["total_payments"] == 1.55  # 1.555 rounded to 1.55 (banker's rounding)
-        assert summary["outstanding_balance"] == 4.56  # 6.11 - 1.55 = 4.56
+        assert summary["total_payments"] == 0.0  # User didn't make payments
+        assert summary["outstanding_balance"] == 1.50  # User is still owed $1.50
         assert summary["has_data"] is True
 
 

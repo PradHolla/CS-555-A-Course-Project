@@ -2,8 +2,9 @@
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
-from models import Expense, Group, User
+from models import Expense, Group, Settlement, User
 from services.expense_service import ExpenseService
+from services.settlement_service import SettlementService
 from utils.decorators import login_required
 
 expenses_bp = Blueprint("expenses", __name__)
@@ -35,15 +36,68 @@ def balance_summary():
 
     # Calculate detailed breakdown (all pairwise debts)
     detailed_breakdown = ExpenseService.calculate_detailed_breakdown(expenses)
+    
+    # Get all settlements to adjust balances
+    all_settlements = Settlement.query.all()
+    
+    # Create a copy of balances and adjust for settlements
+    adjusted_balances = dict(balance_data["balances"])
+    
+    # Adjust each person's balance by subtracting settlements they paid and adding settlements they received
+    for settlement in all_settlements:
+        payer = User.query.get(settlement.payer_id)
+        recipient = User.query.get(settlement.recipient_id)
+        
+        if payer and recipient:
+            # Payer paid money, so their balance increases (less negative or more positive)
+            adjusted_balances[payer.email] = adjusted_balances.get(payer.email, 0.0) + settlement.amount
+            # Recipient received money, so their balance decreases (less positive or more negative)
+            adjusted_balances[recipient.email] = adjusted_balances.get(recipient.email, 0.0) - settlement.amount
+    
+    # Adjust transactions for settlements - subtract settlements from debts
+    adjusted_transactions = []
+    for transaction in balance_data["transactions"]:
+        # Get the actual current debt between these users (accounting for settlements)
+        current_debt = SettlementService.get_debt_between_users(
+            transaction["from"], 
+            transaction["to"]
+        )
+        
+        # Only include the transaction if there's still debt remaining
+        if current_debt > 0.01:  # Use small epsilon for floating point comparison
+            adjusted_transactions.append({
+                "from": transaction["from"],
+                "to": transaction["to"],
+                "amount": current_debt,
+                "expense_description": transaction.get("expense_description", ""),
+            })
+    
+    # Also adjust detailed breakdown for settlements
+    adjusted_detailed = []
+    for transaction in detailed_breakdown:
+        current_debt = SettlementService.get_debt_between_users(
+            transaction["from"], 
+            transaction["to"]
+        )
+        
+        # Only include if there's remaining debt
+        if current_debt > 0.01:
+            adjusted_detailed.append({
+                "from": transaction["from"],
+                "to": transaction["to"],
+                "amount": current_debt,
+                "expense_description": transaction.get("expense_description", ""),
+                "expense_id": transaction.get("expense_id"),
+            })
 
     # Create mapping of email to display name
     all_emails = set(balance_data["balances"].keys())
-    for transaction in balance_data["transactions"]:
+    for transaction in adjusted_transactions:
         all_emails.add(transaction["from"])
         all_emails.add(transaction["to"])
 
     # Also include emails from detailed breakdown
-    for transaction in detailed_breakdown:
+    for transaction in adjusted_detailed:
         all_emails.add(transaction["from"])
         all_emails.add(transaction["to"])
 
@@ -74,9 +128,9 @@ def balance_summary():
     return render_template(
         "apps/expense_splitter/balance.html",
         page_id="balance-summary",
-        balances=balance_data["balances"],
-        transactions=balance_data["transactions"],
-        detailed_breakdown=detailed_breakdown,
+        balances=adjusted_balances,
+        transactions=adjusted_transactions,
+        detailed_breakdown=adjusted_detailed,
         email_to_name=email_to_name,
         user_emails_to_ids=user_emails_to_ids,
         user_map=user_map,
