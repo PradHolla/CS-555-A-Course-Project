@@ -8,17 +8,19 @@ class ExpenseService:
     """Service class for expense-related business logic."""
 
     @staticmethod
-    def calculate_balances(expenses):
+    def calculate_balances(expenses, settlements=None):
         """
-        Calculate who owes whom based on a list of expenses.
+        Calculate who owes whom based on a list of expenses and settlements.
 
         This function:
         1. Calculates how much each person paid
         2. Calculates how much each person should pay (based on split_details)
-        3. Determines the net balance (what they paid - what they should pay)
+        3. Applies settlements (recorded payments) to adjust balances
+        4. Determines the net balance (what they paid - what they should pay + settlements)
 
         Args:
             expenses: List of Expense model objects with amount, payer, and split_details fields
+            settlements: Optional list of Settlement model objects representing recorded payments
 
         Returns:
             Dictionary with:
@@ -55,6 +57,22 @@ class ExpenseService:
             # Positive balance = they are owed money
             # Negative balance = they owe money
             balances[person] = round(paid[person] - should_pay[person], 2)
+
+        # Apply settlements (recorded payments)
+        if settlements:
+            for settlement in settlements:
+                payer_email = settlement.payer.email
+                recipient_email = settlement.recipient.email
+                
+                # The payer settled some debt, so their balance increases (they owe less)
+                balances[payer_email] = balances.get(payer_email, 0.0) + settlement.amount
+                
+                # The recipient received payment, so their balance decreases (they are owed less)
+                balances[recipient_email] = balances.get(recipient_email, 0.0) - settlement.amount
+                
+                # Round to avoid floating point issues
+                balances[payer_email] = round(balances[payer_email], 2)
+                balances[recipient_email] = round(balances[recipient_email], 2)
 
         # Generate simplified transactions
         transactions = ExpenseService._simplify_debts(balances)

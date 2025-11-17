@@ -114,6 +114,105 @@ def notify_settlement_recipient(settlement):
     _send_or_log_email(recipient.email, subject, body, html_body)
 
 
+def notify_debtor_reminder(creditor, debtor, amount, breakdown=None):
+    """
+    Send payment reminder email to debtor from creditor.
+
+    Args:
+        creditor: User object who is owed money
+        debtor: User object who owes money
+        amount: Total amount owed (positive number)
+        breakdown: Optional list of dicts with expense details
+                   [{'description': str, 'amount': float, 'date': str}, ...]
+    """
+    creditor_name = creditor.display_name or creditor.email
+    debtor_name = debtor.display_name or debtor.email
+    balance_url = url_for("expenses.balance_summary", _external=True)
+
+    # Email subject
+    subject = f"Payment Reminder from {creditor_name}"
+
+    # Build plain text body
+    body_lines = [
+        f"Hi {debtor_name},\n",
+        f"This is a friendly reminder that you have an outstanding balance with {creditor_name}.\n",
+        f"Amount Owed: ${abs(amount):.2f}\n",
+    ]
+
+    # Add expense breakdown if provided
+    if breakdown and len(breakdown) > 0:
+        body_lines.append("Expense Details:")
+        for item in breakdown:
+            expense_desc = item.get("description", "Expense")
+            expense_amount = item.get("amount", 0)
+            body_lines.append(f"  - {expense_desc}: ${expense_amount:.2f}")
+        body_lines.append("")
+
+    body_lines.extend([
+        f"You can view your full balance and make a payment here:",
+        f"{balance_url}\n",
+        f"Thanks!",
+        f"{creditor_name}",
+    ])
+
+    body = "\n".join(body_lines)
+
+    # Build HTML body
+    breakdown_html = ""
+    if breakdown and len(breakdown) > 0:
+        breakdown_items = ""
+        for item in breakdown:
+            expense_desc = item.get("description", "Expense")
+            expense_amount = item.get("amount", 0)
+            breakdown_items += f"<li><strong>{expense_desc}</strong>: ${expense_amount:.2f}</li>"
+        
+        breakdown_html = f"""
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; 
+                        border-left: 4px solid #ffc107; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #856404;">Expense Details</h3>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    {breakdown_items}
+                </ul>
+            </div>
+        """
+
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #FF9800;">Payment Reminder</h2>
+            <p>Hi <strong>{debtor_name}</strong>,</p>
+            <p>This is a friendly reminder that you have an outstanding balance with <strong>{creditor_name}</strong>.</p>
+
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #FF9800;">Amount Owed</h3>
+                <p style="font-size: 24px; font-weight: bold; color: #FF5722; margin: 10px 0;">
+                    ${abs(amount):.2f}
+                </p>
+            </div>
+
+            {breakdown_html}
+
+            <p>
+                <a href="{balance_url}"
+                   style="background-color: #FF9800; color: white; padding: 12px 24px;
+                          text-decoration: none; border-radius: 5px; display: inline-block;
+                          font-weight: bold;">
+                    View Balance & Make Payment
+                </a>
+            </p>
+
+            <p style="margin-top: 30px;">Thanks!<br><strong>{creditor_name}</strong></p>
+
+            <p style="color: #666; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
+                This is a payment reminder sent through your expense splitting application.
+            </p>
+        </body>
+    </html>
+    """
+
+    _send_or_log_email(debtor.email, subject, body, html_body)
+
+
 def notify_expense_participants(expense, participant_emails):
     """Send notification to all participants when an expense is added."""
     subject = f"New expense added: {expense.description}"
