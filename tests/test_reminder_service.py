@@ -675,3 +675,208 @@ class TestNotificationPreferences:
             assert "debtor1@example.com" in result["users_notified"]
             assert "debtor2@example.com" not in result["users_notified"]
             assert len(calls) == 1
+
+
+class TestExceptionCoverage:
+    """Tests to cover exception handling branches."""
+
+    def test_calculate_balance_age_database_error(self, app, monkeypatch):
+        """Test calculate_balance_age handles database errors."""
+        with app.app_context():
+            user = create_test_user("user@example.com", "User")
+            
+            # Mock Expense.query to raise an exception
+            def mock_query_error(*args, **kwargs):
+                raise Exception("Database connection error")
+            
+            from models import Expense
+            monkeypatch.setattr(Expense.query, "filter", mock_query_error)
+            
+            # Should return (0, None) when exception occurs
+            days, date = ReminderService.calculate_balance_age(user.id)
+            assert days == 0
+            assert date is None
+
+    def test_get_users_needing_reminders_user_processing_error(self, app, monkeypatch):
+        """Test get_users_needing_reminders continues when one user fails."""
+        with app.app_context():
+            user1 = create_test_user("user1@example.com", "User1")
+            user2 = create_test_user("user2@example.com", "User2")
+            
+            # Create expenses for both users
+            create_test_expense(
+                payer="payer@example.com",
+                split_details={"payer@example.com": 50.0, "user1@example.com": 50.0},
+                description="Expense 1",
+                amount=100.0,
+                days_ago=10
+            )
+            create_test_expense(
+                payer="payer@example.com",
+                split_details={"payer@example.com": 50.0, "user2@example.com": 50.0},
+                description="Expense 2",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            # Mock get_user_summary to fail for user1 but succeed for user2
+            from services.dashboard_service import DashboardService
+            original_summary = DashboardService.get_user_summary
+            
+            def mock_summary(user_id):
+                if user_id == user1.id:
+                    raise Exception("Processing error")
+                return original_summary(user_id)
+            
+            monkeypatch.setattr(DashboardService, "get_user_summary", mock_summary)
+            
+            # Should continue and process user2
+            users_to_remind = ReminderService.get_users_needing_reminders(days_threshold=5)
+            
+            # Should have user2 but not user1
+            emails = [u[0].email for u in users_to_remind]
+            assert "user2@example.com" in emails
+            assert "user1@example.com" not in emails
+
+    def test_get_users_needing_reminders_critical_error(self, app, monkeypatch):
+        """Test get_users_needing_reminders handles critical errors."""
+        with app.app_context():
+            # Mock User.query.all() to raise exception
+            from models import User
+            def mock_query_error():
+                raise Exception("Critical database error")
+            
+            monkeypatch.setattr(User.query, "all", mock_query_error)
+            
+            # Should return empty list on critical error
+            users_to_remind = ReminderService.get_users_needing_reminders()
+            assert users_to_remind == []
+
+    def test_get_balance_breakdown_json_error(self, app):
+        """Test get_balance_breakdown handles JSON decode errors."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Create expense with invalid JSON in split_details
+            from models import Expense
+            expense = Expense(
+                description="Test",
+                amount=100.0,
+                payer="creditor@example.com",
+                participants="debtor@example.com, creditor@example.com",
+                split_type="custom",
+                split_details="{invalid json}",  # Invalid JSON
+                expense_date=datetime.now() - timedelta(days=10)
+            )
+            db.session.add(expense)
+            db.session.commit()
+            
+            # Should handle the error and return empty list
+            breakdown = ReminderService.get_balance_breakdown(debtor.id)
+            assert breakdown == []
+
+    def test_get_balance_breakdown_critical_error(self, app, monkeypatch):
+        """Test get_balance_breakdown handles critical errors."""
+        with app.app_context():
+            user = create_test_user("user@example.com", "User")
+            
+            # Mock Expense.query to raise exception
+            from models import Expense
+            def mock_query_error(*args, **kwargs):
+                raise Exception("Critical error")
+            
+            monkeypatch.setattr(Expense.query, "filter", mock_query_error)
+            
+            # Should return empty list on critical error
+            breakdown = ReminderService.get_balance_breakdown(user.id)
+            assert breakdown == []
+
+    def test_send_reminders_notification_error(self, app, monkeypatch):
+        """Test send_reminders continues when notification fails for one user."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            debtor1 = create_test_user("debtor1@example.com", "Debtor1")
+            debtor2 = create_test_user("debtor2@example.com", "Debtor2")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Create expenses for both debtors
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor1@example.com": 50.0},
+                description="Expense 1",
+                amount=100.0,
+                days_ago=10
+            )
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor2@example.com": 50.0},
+                description="Expense 2",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            # Mock send_payment_reminder to fail for debtor1
+            call_count = [0]
+            def mock_send(user, balance_amount, days_outstanding, balance_breakdown):
+                call_count[0] += 1
+                if user.email == "debtor1@example.com":
+                    raise Exception("Email service error")
+            
+            import services.notification_service
+            monkeypatch.setattr(services.notification_service, "send_payment_reminder", mock_send)
+            
+            result = ReminderService.send_reminders(days_threshold=5)
+            
+            # Should have 1 success (debtor2) and 1 error (debtor1)
+            assert result["reminders_sent"] == 1
+            assert "debtor2@example.com" in result["users_notified"]
+            assert len(result["errors"]) == 1
+            assert result["errors"][0]["user"] == "debtor1@example.com"
+
+    def test_send_reminders_critical_error(self, app, monkeypatch):
+        """Test send_reminders handles critical errors."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            # Mock get_users_needing_reminders to raise exception
+            def mock_get_users_error(*args, **kwargs):
+                raise Exception("Critical system error")
+            
+            monkeypatch.setattr(ReminderService, "get_users_needing_reminders", mock_get_users_error)
+            
+            result = ReminderService.send_reminders()
+            
+            # Should return error result
+            assert result["reminders_sent"] == 0
+            assert len(result["errors"]) > 0
+            assert "Critical" in result["errors"][0]["error"]
+
+    def test_send_reminders_empty_breakdown(self, app, monkeypatch):
+        """Test send_reminders skips users with empty breakdown."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Test Expense",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            # Mock get_balance_breakdown to return empty list
+            def mock_empty_breakdown(user_id):
+                return []
+            
+            monkeypatch.setattr(ReminderService, "get_balance_breakdown", mock_empty_breakdown)
+            
+            result = ReminderService.send_reminders(days_threshold=5)
+            
+            # Should not send reminders when breakdown is empty
+            assert result["reminders_sent"] == 0
+            assert len(result["users_notified"]) == 0
