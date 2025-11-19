@@ -24,12 +24,25 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
     """
     # Arrange
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="neha@example.com")
         recipient = User(email="john@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
+        
+        # Create an expense so there's a debt to settle
+        expense = Expense(
+            description="Shared expense",
+            amount=1000.00,
+            payer=recipient.email,  # Recipient paid, so payer owes them
+            participants=f"{payer.email}, {recipient.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.commit()
 
     # Simulate logged-in user
     with client.session_transaction() as sess:
@@ -77,12 +90,25 @@ def test_settlement_notification_contains_detail_link(client, app):
     """
     # Arrange
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="alice@example.com")
         recipient = User(email="bob@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
+        
+        # Create an expense so there's a debt to settle
+        expense = Expense(
+            description="Shared expense",
+            amount=501.00,
+            payer=recipient.email,
+            participants=f"{payer.email}, {recipient.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
@@ -112,12 +138,25 @@ def test_settlement_without_note_sends_notification(client, app):
     """Test that settlement without a note still sends notification."""
     # Arrange
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="charlie@example.com")
         recipient = User(email="diana@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
+        
+        # Create an expense so there's a debt to settle
+        expense = Expense(
+            description="Shared expense",
+            amount=200.00,
+            payer=recipient.email,
+            participants=f"{payer.email}, {recipient.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
@@ -186,6 +225,8 @@ def test_multiple_settlements_send_separate_notifications(client, app):
     """Test that multiple settlements send separate notifications."""
     # Arrange
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="grace@example.com")
         recipient1 = User(email="henry@example.com")
         recipient2 = User(email="iris@example.com")
@@ -194,6 +235,24 @@ def test_multiple_settlements_send_separate_notifications(client, app):
         payer_id = payer.id
         recipient1_id = recipient1.id
         recipient2_id = recipient2.id
+        
+        # Create expenses so there are debts to settle
+        expense1 = Expense(
+            description="Expense 1",
+            amount=600.00,
+            payer=recipient1.email,
+            participants=f"{payer.email}, {recipient1.email}",
+            split_type="equal",
+        )
+        expense2 = Expense(
+            description="Expense 2",
+            amount=600.00,
+            payer=recipient2.email,
+            participants=f"{payer.email}, {recipient2.email}",
+            split_type="equal",
+        )
+        db.session.add_all([expense1, expense2])
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
@@ -234,12 +293,25 @@ def test_settlement_notification_is_sent(client, app):
     """Test that notification is sent when settlement is created."""
     # Arrange
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="jack@example.com")
         recipient = User(email="kate@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
+        
+        # Create an expense so there's a debt to settle
+        expense = Expense(
+            description="Shared expense",
+            amount=1000.00,
+            payer=recipient.email,
+            participants=f"{payer.email}, {recipient.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id

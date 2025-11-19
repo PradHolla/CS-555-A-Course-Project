@@ -20,6 +20,7 @@ class User(db.Model):
     otp = db.Column(db.String(6), nullable=True)
     otp_expiry = db.Column(db.DateTime, nullable=True)
     profile_picture = db.Column(db.String(255), nullable=True)  # Filename for profile picture
+    daily_reminder_enabled = db.Column(db.Boolean, default=True, nullable=False)  # Daily reminder preference
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Many-to-many relationship with Groups

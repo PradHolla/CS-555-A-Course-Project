@@ -31,6 +31,10 @@ class ReminderService:
             Returns (0, None) if user has no unpaid expenses
         """
         try:
+            if not user_id:
+                logger.warning("Invalid user_id provided (None or 0)")
+                return (0, None)
+            
             user = db.session.get(User, user_id)
             if not user:
                 logger.warning(f"User {user_id} not found")
@@ -100,6 +104,11 @@ class ReminderService:
 
             for user in users:
                 try:
+                    # Skip users who have disabled daily reminders
+                    if not user.daily_reminder_enabled:
+                        logger.debug(f"User {user.email} has disabled daily reminders, skipping")
+                        continue
+
                     # Calculate current balance using existing dashboard service
                     summary = DashboardService.get_user_summary(user.id)
 

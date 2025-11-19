@@ -153,6 +153,36 @@
                 <p class="block text-xs text-gray-400 mt-1">This name will be visible to other members in your groups</p>
             </div>
 
+            <!-- Notification Preferences -->
+            <div class="bg-slate-950/30 border border-cyan-500/10 rounded-lg p-4">
+                <h4 class="text-sm font-mono text-cyan-400 mb-3 uppercase tracking-wider">Notification Preferences</h4>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <label for="daily_reminder_toggle" class="text-sm font-medium text-gray-300 cursor-pointer">
+                                Daily Expense Reminders
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Receive daily notifications about outstanding balances
+                            </p>
+                        </div>
+                        <div class="flex-shrink-0 ml-4">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" 
+                                       id="daily_reminder_toggle" 
+                                       name="daily_reminder_enabled"
+                                       value="true"
+                                       {% if user.daily_reminder_enabled %}checked{% endif %}
+                                       onchange="updateNotificationPreference(this)"
+                                       class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="notification-status" class="hidden text-xs font-mono"></div>
+                </div>
+            </div>
+
             <!-- Account Info -->
             <div class="bg-slate-950/30 border border-cyan-500/10 rounded-lg p-4">
                 <h4 class="text-sm font-mono text-cyan-400 mb-3 uppercase tracking-wider">Account Information</h4>
@@ -281,5 +311,57 @@
             uploadBtn.disabled = true;
         }
     });
+    
+    // Update notification preference via AJAX
+    function updateNotificationPreference(checkbox) {
+        const statusDiv = document.getElementById('notification-status');
+        const enabled = checkbox.checked;
+        
+        // Show loading state
+        statusDiv.className = 'text-xs font-mono text-gray-400';
+        statusDiv.textContent = 'Updating...';
+        statusDiv.classList.remove('hidden');
+        
+        // Send AJAX request
+        fetch('{{ url_for("profile.update_notification_preferences") }}', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                dailyExpenseNotificationsEnabled: enabled
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                // Show success message
+                statusDiv.className = 'text-xs font-mono text-green-400';
+                statusDiv.textContent = '✓ ' + data.message;
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 3000);
+            } else if (data.error) {
+                // Show error message
+                statusDiv.className = 'text-xs font-mono text-red-400';
+                statusDiv.textContent = '✗ ' + data.error;
+                
+                // Revert checkbox state
+                checkbox.checked = !enabled;
+            }
+        })
+        .catch(error => {
+            // Show error message
+            statusDiv.className = 'text-xs font-mono text-red-400';
+            statusDiv.textContent = '✗ Failed to update preference';
+            
+            // Revert checkbox state
+            checkbox.checked = !enabled;
+            
+            console.error('Error:', error);
+        });
+    }
 </script>
 {% endblock %}

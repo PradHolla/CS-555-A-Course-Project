@@ -233,8 +233,12 @@ def test_balance_summary_includes_detailed_breakdown(client, app):
     from extensions import db
 
     with app.app_context():
+        # Create users with emails
         user = User(email="test@example.com")
-        db.session.add(user)
+        alice = User(email="alice@example.com")
+        bob = User(email="bob@example.com")
+        charlie = User(email="charlie@example.com")
+        db.session.add_all([user, alice, bob, charlie])
         db.session.commit()
         user_id = user.id
 
@@ -242,14 +246,14 @@ def test_balance_summary_includes_detailed_breakdown(client, app):
         session["user_id"] = user_id
         session["user_email"] = "test@example.com"
 
-    # Alice paid $30 for lunch split equally
+    # Alice paid $30 for lunch split equally (each person owes $10)
     expense = Expense(
         description="Lunch",
         amount=30.0,
-        payer="Alice",
-        participants="Alice, Bob, Charlie",
+        payer="alice@example.com",
+        participants="alice@example.com, bob@example.com, charlie@example.com",
         split_type="equal",
-        split_details='{"Alice": 10.0, "Bob": 10.0, "Charlie": 10.0}',
+        split_details='{"alice@example.com": 10.0, "bob@example.com": 10.0, "charlie@example.com": 10.0}',
     )
     db.session.add(expense)
     db.session.commit()
@@ -272,8 +276,11 @@ def test_balance_summary_detailed_breakdown_with_multiple_expenses(client, app):
     from extensions import db
 
     with app.app_context():
+        # Create users with emails
         user = User(email="test@example.com")
-        db.session.add(user)
+        alice = User(email="alice@example.com")
+        bob = User(email="bob@example.com")
+        db.session.add_all([user, alice, bob])
         db.session.commit()
         user_id = user.id
 
@@ -282,21 +289,23 @@ def test_balance_summary_detailed_breakdown_with_multiple_expenses(client, app):
         session["user_email"] = "test@example.com"
 
     # Create two expenses
+    # Expense 1: Alice paid $30, each owes $15
     expense1 = Expense(
         description="Lunch",
         amount=30.0,
-        payer="Alice",
-        participants="Alice, Bob",
+        payer="alice@example.com",
+        participants="alice@example.com, bob@example.com",
         split_type="equal",
-        split_details='{"Alice": 15.0, "Bob": 15.0}',
+        split_details='{"alice@example.com": 15.0, "bob@example.com": 15.0}',
     )
+    # Expense 2: Bob paid $60, each owes $30
     expense2 = Expense(
         description="Dinner",
         amount=60.0,
-        payer="Bob",
-        participants="Alice, Bob",
+        payer="bob@example.com",
+        participants="alice@example.com, bob@example.com",
         split_type="equal",
-        split_details='{"Alice": 30.0, "Bob": 30.0}',
+        split_details='{"alice@example.com": 30.0, "bob@example.com": 30.0}',
     )
     db.session.add_all([expense1, expense2])
     db.session.commit()

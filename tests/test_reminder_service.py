@@ -40,6 +40,15 @@ def client(app):
 
 def create_test_user(email, display_name):
     """Helper to create test user."""
+    # Check if user already exists
+    user = User.query.filter_by(email=email).first()
+    if user:
+        # Update existing user
+        user.display_name = display_name
+        db.session.commit()
+        return user
+    
+    # Create new user
     user = User(email=email, display_name=display_name)
     db.session.add(user)
     db.session.commit()
@@ -490,3 +499,179 @@ class TestErrorHandling:
             # Should not send any reminders
             assert result["reminders_sent"] == 0
             assert isinstance(result["errors"], list)
+
+
+
+class TestNotificationPreferences:
+    """Tests for notification preference functionality."""
+
+    def test_user_with_disabled_notifications_not_reminded(self, app):
+        """Test that users with disabled notifications are skipped."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Disable notifications for debtor
+            debtor.daily_reminder_enabled = False
+            db.session.commit()
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Old expense",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            users = ReminderService.get_users_needing_reminders(7)
+            
+            # Debtor should not be in list
+            assert len(users) == 0
+
+    def test_user_with_enabled_notifications_is_reminded(self, app):
+        """Test that users with enabled notifications are included."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Explicitly enable notifications (default is True)
+            debtor.daily_reminder_enabled = True
+            db.session.commit()
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Old expense",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            users = ReminderService.get_users_needing_reminders(7)
+            
+            # Debtor should be in list
+            assert len(users) == 1
+            assert users[0][0].email == "debtor@example.com"
+
+    def test_new_user_has_notifications_enabled_by_default(self, app):
+        """Test that new users have notifications enabled by default."""
+        with app.app_context():
+            user = create_test_user("newuser@example.com", "New User")
+            
+            # Should be enabled by default
+            assert user.daily_reminder_enabled is True
+
+    def test_toggle_preference_affects_reminders(self, app):
+        """Test that toggling preference immediately affects reminder eligibility."""
+        with app.app_context():
+            debtor = create_test_user("debtor@example.com", "Debtor")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor@example.com": 50.0},
+                description="Old expense",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            # Initially enabled - should be included
+            users = ReminderService.get_users_needing_reminders(7)
+            assert len(users) == 1
+            
+            # Disable notifications
+            debtor.daily_reminder_enabled = False
+            db.session.commit()
+            
+            # Should not be included
+            users = ReminderService.get_users_needing_reminders(7)
+            assert len(users) == 0
+            
+            # Re-enable notifications
+            debtor.daily_reminder_enabled = True
+            db.session.commit()
+            
+            # Should be included again
+            users = ReminderService.get_users_needing_reminders(7)
+            assert len(users) == 1
+
+    def test_multiple_users_independent_preferences(self, app):
+        """Test that multiple users can have independent preferences."""
+        with app.app_context():
+            debtor1 = create_test_user("debtor1@example.com", "Debtor1")
+            debtor2 = create_test_user("debtor2@example.com", "Debtor2")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Set different preferences
+            debtor1.daily_reminder_enabled = True
+            debtor2.daily_reminder_enabled = False
+            db.session.commit()
+            
+            # Create expenses for both
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor1@example.com": 50.0},
+                description="Expense 1",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor2@example.com": 50.0},
+                description="Expense 2",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            users = ReminderService.get_users_needing_reminders(7)
+            
+            # Only debtor1 should be included
+            assert len(users) == 1
+            assert users[0][0].email == "debtor1@example.com"
+
+    def test_send_reminders_respects_preferences(self, app, monkeypatch):
+        """Test that send_reminders respects notification preferences."""
+        with app.app_context():
+            app.config["REMINDER_ENABLED"] = True
+            
+            debtor1 = create_test_user("debtor1@example.com", "Debtor1")
+            debtor2 = create_test_user("debtor2@example.com", "Debtor2")
+            creditor = create_test_user("creditor@example.com", "Creditor")
+            
+            # Enable for debtor1, disable for debtor2
+            debtor1.daily_reminder_enabled = True
+            debtor2.daily_reminder_enabled = False
+            db.session.commit()
+            
+            # Create expenses for both
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor1@example.com": 50.0},
+                description="Expense 1",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            create_test_expense(
+                payer="creditor@example.com",
+                split_details={"creditor@example.com": 50.0, "debtor2@example.com": 50.0},
+                description="Expense 2",
+                amount=100.0,
+                days_ago=10
+            )
+            
+            # Track calls
+            calls = []
+            def mock_send(user, balance_amount, days_outstanding, balance_breakdown):
+                calls.append(user.email)
+            
+            import services.notification_service
+            monkeypatch.setattr(services.notification_service, "send_payment_reminder", mock_send)
+            
+            result = ReminderService.send_reminders(7)
+            
+            # Only debtor1 should receive reminder
+            assert result["reminders_sent"] == 1
+            assert "debtor1@example.com" in result["users_notified"]
+            assert "debtor2@example.com" not in result["users_notified"]
+            assert len(calls) == 1

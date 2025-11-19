@@ -28,12 +28,25 @@ def test_payment_email_includes_all_required_fields(client, app):
     - Redirection link works and opens correct transaction
     """
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="neha@example.com", display_name="Neha")
         recipient = User(email="john@example.com", display_name="John")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
+        
+        # Create an expense so there's a debt to settle
+        expense = Expense(
+            description="Shared expense",
+            amount=1000.00,
+            payer=recipient.email,
+            participants=f"{payer.email}, {recipient.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
@@ -207,12 +220,25 @@ def test_email_sent_on_settlement_creation(client, app):
     ✔ Then an email is sent
     """
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="iris@example.com")
         recipient = User(email="jack@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
+        
+        # Create an expense so there's a debt to settle
+        expense = Expense(
+            description="Shared expense",
+            amount=900.00,
+            payer=recipient.email,
+            participants=f"{payer.email}, {recipient.email}",
+            split_type="equal",
+        )
+        db.session.add(expense)
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id
@@ -317,6 +343,8 @@ def test_multiple_payments_send_separate_emails(client, app):
     - Feature tested with multiple group members
     """
     with app.app_context():
+        from models import Expense
+        
         payer = User(email="olivia@example.com")
         recipient1 = User(email="paul@example.com")
         recipient2 = User(email="quinn@example.com")
@@ -325,6 +353,24 @@ def test_multiple_payments_send_separate_emails(client, app):
         payer_id = payer.id
         recipient1_id = recipient1.id
         recipient2_id = recipient2.id
+        
+        # Create expenses so there are debts to settle
+        expense1 = Expense(
+            description="Expense 1",
+            amount=200.00,
+            payer=recipient1.email,
+            participants=f"{payer.email}, {recipient1.email}",
+            split_type="equal",
+        )
+        expense2 = Expense(
+            description="Expense 2",
+            amount=400.00,
+            payer=recipient2.email,
+            participants=f"{payer.email}, {recipient2.email}",
+            split_type="equal",
+        )
+        db.session.add_all([expense1, expense2])
+        db.session.commit()
 
     with client.session_transaction() as sess:
         sess["user_id"] = payer_id

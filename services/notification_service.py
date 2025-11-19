@@ -67,7 +67,13 @@ def notify_settlement_recipient(settlement):
     payer_name = payer.display_name or payer.email
     amount = settlement.amount
     timestamp = settlement.created_at.strftime("%Y-%m-%d %H:%M:%S")
-    detail_url = url_for("settlements.detail", settlement_id=settlement.id, _external=True)
+    
+    # Try to generate URL, fallback if not in request context
+    try:
+        detail_url = url_for("settlements.detail", settlement_id=settlement.id, _external=True)
+    except RuntimeError:
+        # Not in request context, use placeholder
+        detail_url = f"/settlements/{settlement.id}"
 
     # Email subject
     subject = f"{payer_name} has paid ${amount:.2f} to you"
