@@ -2,6 +2,7 @@
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
+from extensions import db
 from models import Expense, Group, Settlement, User
 from services.expense_service import ExpenseService
 from services.settlement_service import SettlementService
@@ -45,8 +46,8 @@ def balance_summary():
     
     # Adjust each person's balance by subtracting settlements they paid and adding settlements they received
     for settlement in all_settlements:
-        payer = User.query.get(settlement.payer_id)
-        recipient = User.query.get(settlement.recipient_id)
+        payer = db.session.get(User, settlement.payer_id)
+        recipient = db.session.get(User, settlement.recipient_id)
         
         if payer and recipient:
             # Payer paid money, so their balance increases (less negative or more positive)

@@ -376,8 +376,10 @@ def test_get_user_summary_complex_scenario(app):
 
         # User paid 90, owes 30 from their share = +60
         # User owes 20 from other1's expense = -20
-        # User paid settlement of 15 = -15
-        # Net: 60 - 20 - 15 = 25
+        # Net before settlement: 60 - 20 = 40
+        # User paid settlement of 15 to other1 (partial payment of 20 owed)
+        # After settlement: User still owes 5 to other1
+        # Outstanding balance: 60 - 5 = 55
         assert summary["total_expenses"] == 90.00
         assert summary["total_payments"] == 15.00
-        assert summary["outstanding_balance"] == 25.00
+        assert summary["outstanding_balance"] == 55.00
