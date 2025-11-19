@@ -23,26 +23,32 @@ def test_dashboard_displays_with_data(client, app):
         db.session.flush()
 
         # Create expenses
+        # Create other user first (needed for split)
+        other_user = User(email="other@example.com", display_name="Other User")
+        db.session.add(other_user)
+        db.session.flush()
+        
+        # User paid $50 for groceries, split with other user - other owes $25
         expense1 = Expense(
-            description="Lunch",
+            description="Groceries",
             amount=50.00,
             payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
             split_type="equal",
         )
+        # User paid $30 for dinner, split with other user - other owes $15
         expense2 = Expense(
             description="Dinner",
             amount=30.00,
             payer=user.display_name,
+            participants=f"{user.email}, {other_user.email}",
             split_type="equal",
         )
         db.session.add_all([expense1, expense2])
-
-        # Create other user and settlements
-        other_user = User(email="other@example.com", display_name="Other User")
-        db.session.add(other_user)
         db.session.flush()
 
-        settlement = Settlement(amount=20.00, payer_id=user.id, recipient_id=other_user.id)
+        # Other user pays back $20 (still owes $20)
+        settlement = Settlement(amount=20.00, payer_id=other_user.id, recipient_id=user.id)
         db.session.add(settlement)
         db.session.commit()
 
@@ -61,10 +67,10 @@ def test_dashboard_displays_with_data(client, app):
     assert b"Test User" in response.data
     # Check for total expenses: $80.00
     assert b"$80.00" in response.data
-    # Check for total payments: $20.00
+    # Check for total payments: $0.00 (user didn't make payments, they received payment)
+    assert b"$0.00" in response.data
+    # Check for outstanding balance: $20.00 (was owed $40, received $20 back)
     assert b"$20.00" in response.data
-    # Check for outstanding balance: $60.00
-    assert b"$60.00" in response.data
     # Should not show "no data to display"
     assert b"no data to display" not in response.data
 
