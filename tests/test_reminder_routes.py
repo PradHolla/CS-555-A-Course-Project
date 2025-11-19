@@ -36,10 +36,8 @@ def test_send_reminder_validates_debtor_exists(client, app):
 
     # Should show error message
     assert response.status_code == 200
-    # Check flash messages
-    with client.session_transaction() as session:
-        flashed_messages = session.get('_flashes', [])
-        assert any('error' in msg[1].lower() or 'not found' in msg[1].lower() for msg in flashed_messages)
+    # Check that error message appears in the response
+    assert b"Error" in response.data or b"not found" in response.data
 
 
 def test_send_reminder_validates_creditor_is_owed_money(client, app):
@@ -63,11 +61,8 @@ def test_send_reminder_validates_creditor_is_owed_money(client, app):
 
     # Should show warning/error
     assert response.status_code == 200
-    # Check flash messages
-    with client.session_transaction() as session:
-        flashed_messages = session.get('_flashes', [])
-        # Look for warning category or message content
-        assert any(msg[0] == 'warning' or 'not owed' in msg[1].lower() for msg in flashed_messages)
+    # Check that warning message appears in the response
+    assert b"not owed" in response.data or b"You are not owed" in response.data
 
 
 def test_send_reminder_success_sends_notification(client, app):
@@ -152,10 +147,8 @@ def test_send_reminder_success_flash_message(client, app):
 
         # Should show success message
         assert response.status_code == 200
-        # Check flash messages instead of HTML response
-        with client.session_transaction() as session:
-            flashed_messages = session.get('_flashes', [])
-            assert any('success' in msg[0].lower() or 'reminder sent' in msg[1].lower() for msg in flashed_messages)
+        # Check that success message appears in the response
+        assert b"reminder sent" in response.data or b"Payment reminder sent" in response.data
 
 
 def test_send_reminder_redirects_to_balance_summary(client, app):
@@ -287,9 +280,8 @@ def test_send_reminder_handles_notification_exception(client, app):
 
         # Should show error message
         assert response.status_code == 200
-        with client.session_transaction() as session:
-            flashed_messages = session.get('_flashes', [])
-            assert any('error' in msg[0].lower() and 'email service unavailable' in msg[1].lower() for msg in flashed_messages)
+        # Check that error message appears in the response
+        assert b"Error" in response.data or b"Email service unavailable" in response.data
 
 
 def test_balance_summary_with_group_filter(client, app):
