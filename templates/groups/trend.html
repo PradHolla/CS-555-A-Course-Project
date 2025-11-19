@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}Expense Trends{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow">
+    <h1 class="text-xl font-semibold mb-4">Expense Trends</h1>
+
+    {% if not rows %}
+    <p class="text-gray-600">No expense data available for your groups yet.</p>
+    {% else %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="font-medium mb-2">Monthly Totals</h2>
+            <canvas id="monthlyChart" height="120"></canvas>
+            <p class="mt-3 text-sm text-gray-600">Highest month: <strong>{{ month_highest_label or 'N/A' }}</strong> ({{ '%.2f'|format(month_highest_total) }})</p>
+            <p class="text-sm text-gray-600">Lowest month: <strong>{{ month_lowest_label or 'N/A' }}</strong> ({{ '%.2f'|format(month_lowest_total) }})</p>
+        </div>
+
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="font-medium mb-2">Category Breakdown</h2>
+            <canvas id="categoryPie" height="180"></canvas>
+            <div class="mt-3 text-sm text-gray-600">
+                <p>Most frequent category: <strong>{{ category_most_freq or 'N/A' }}</strong></p>
+                <p>Highest total category: <strong>{{ category_highest_amount or 'N/A' }}</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-6 bg-white p-4 rounded shadow">
+        <h2 class="font-medium mb-2">Per-payer monthly table</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto border-collapse">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="px-4 py-2 text-left">Payer</th>
+                        {% for m in months %}
+                        <th class="px-4 py-2 text-right">{{ m }}</th>
+                        {% endfor %}
+                        <th class="px-4 py-2 text-right">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="border-t">
+                        <td class="px-4 py-2">{{ row.display_name }}</td>
+                        {% for m in months %}
+                        <td class="px-4 py-2 text-right">{{ '%.2f'|format(row.months.get(m, 0.0)) }}</td>
+                        {% endfor %}
+                        <td class="px-4 py-2 text-right font-semibold">{{ '%.2f'|format(row.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Chart.js CDN and data initialization #}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const months = {{ months|tojson|safe }} || [];
+        const monthTotals = {{ month_totals|tojson|safe }} || [];
+        const categoryLabels = {{ category_labels|tojson|safe }} || [];
+        const categoryAmounts = {{ category_amounts|tojson|safe }} || [];
+
+        // Monthly chart
+        const mctx = document.getElementById('monthlyChart').getContext('2d');
+        new Chart(mctx, {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Monthly total',
+                    data: monthTotals,
+                    backgroundColor: 'rgba(59,130,246,0.6)',
+                    borderColor: 'rgba(59,130,246,1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        // Category pie chart
+        const cctx = document.getElementById('categoryPie').getContext('2d');
+        const palette = ['#F97316', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#EF4444', '#6366F1'];
+        new Chart(cctx, {
+            type: 'pie',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryAmounts,
+                    backgroundColor: categoryLabels.map((_, i) => palette[i % palette.length])
+                }]
+            },
+            options: { responsive: true }
+        });
+    </script>
+</div>
+{% endblock %}
