@@ -199,3 +199,76 @@ class TestProfileNotificationAPI:
         with app.app_context():
             user = db.session.get(User, authenticated_user)
             assert user.daily_reminder_enabled is False  # Last update was False (i=9, odd)
+
+    def test_update_notification_preferences_database_error(
+        self, app, client, authenticated_user, monkeypatch
+    ):
+        """Test handling of database errors during preference update."""
+        with app.app_context():
+            # Mock User.query to simulate database error
+            original_commit = db.session.commit
+            call_count = [0]
+            
+            def mock_commit():
+                call_count[0] += 1
+                # Only fail on the first call (the preference update)
+                if call_count[0] == 1:
+                    raise Exception("Database error")
+                return original_commit()
+            
+            monkeypatch.setattr(db.session, "commit", mock_commit)
+            
+            response = client.patch(
+                "/profile/notification-preferences",
+                data=json.dumps({"dailyExpenseNotificationsEnabled": False}),
+                content_type="application/json"
+            )
+            
+            assert response.status_code == 500
+            data = json.loads(response.data)
+            assert "error" in data
+            assert "Failed to update notification preference" in data["error"]
+
+    def test_update_notification_preferences_form_data_success_path(
+        self, app, client, authenticated_user
+    ):
+        """Test successful form data update (non-AJAX)."""
+        response = client.post(
+            "/profile/notification-preferences",
+            data={"daily_reminder_enabled": "true"},
+            follow_redirects=True
+        )
+        
+        # Should redirect and show success
+        assert response.status_code == 200
+        
+        # Verify in database
+        with app.app_context():
+            user = db.session.get(User, authenticated_user)
+            assert user.daily_reminder_enabled is True
+
+    def test_update_notification_preferences_form_data_with_error(
+        self, app, client, authenticated_user, monkeypatch
+    ):
+        """Test form data update with database error."""
+        with app.app_context():
+            original_commit = db.session.commit
+            call_count = [0]
+            
+            def mock_commit():
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    raise Exception("Database error")
+                return original_commit()
+            
+            monkeypatch.setattr(db.session, "commit", mock_commit)
+            
+            response = client.post(
+                "/profile/notification-preferences",
+                data={"daily_reminder_enabled": "false"},
+                follow_redirects=False
+            )
+            
+            # Should redirect to profile page
+            assert response.status_code == 302
+            assert "/profile" in response.location
