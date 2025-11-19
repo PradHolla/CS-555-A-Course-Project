@@ -1,4 +1,4 @@
-`"""Business logic for dashboard financial calculations."""
+"""Business logic for dashboard financial calculations."""
 
 from extensions import db
 from models import Expense, Settlement, User
