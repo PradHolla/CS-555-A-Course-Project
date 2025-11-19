@@ -100,6 +100,11 @@ class ReminderService:
 
             for user in users:
                 try:
+                    # Skip users who have disabled daily reminders
+                    if not user.daily_reminder_enabled:
+                        logger.debug(f"User {user.email} has disabled daily reminders, skipping")
+                        continue
+
                     # Calculate current balance using existing dashboard service
                     summary = DashboardService.get_user_summary(user.id)
 

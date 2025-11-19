@@ -121,6 +121,10 @@ def init_db(app):
                     # group is a reserved word; quote it with double quotes for SQLite
                     cur.execute('ALTER TABLE "group" ADD COLUMN profile_picture VARCHAR(200)')
 
+                # Add daily_reminder_enabled column if not exists
+                if 'daily_reminder_enabled' not in user_cols:
+                    cur.execute('ALTER TABLE user ADD COLUMN daily_reminder_enabled BOOLEAN NOT NULL DEFAULT 1')
+
                 conn.commit()
                 conn.close()
         except Exception as e:
