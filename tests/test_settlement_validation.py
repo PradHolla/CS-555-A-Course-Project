@@ -1,6 +1,5 @@
 """Tests for settlement validation and recording feature."""
 
-
 from extensions import db
 from models import Expense, Settlement, User
 from services.settlement_service import SettlementService

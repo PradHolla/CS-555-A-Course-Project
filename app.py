@@ -125,11 +125,13 @@ def init_db(app):
                     )
 
                 # Check if user_group_points table exists
-                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_group_points'")
+                cur.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='user_group_points'"
+                )
                 if not cur.fetchone():
                     # Table doesn't exist, db.create_all() should have created it, but let's verify
                     print("Note: user_group_points table should be created by db.create_all()")
-                
+
                 conn.commit()
                 conn.close()
         except Exception as e:

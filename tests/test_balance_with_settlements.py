@@ -1,6 +1,5 @@
 """Tests for balance summary page with settlements."""
 
-
 from extensions import db
 from models import Expense, Settlement, User
 

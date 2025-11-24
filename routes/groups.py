@@ -13,7 +13,6 @@ from services.notification_service import (
     notify_expense_participants,
     notify_group_invitation,
 )
-from services.points_service import PointsService
 from utils.decorators import login_required
 from utils.validators import is_valid_email
 
@@ -33,9 +32,10 @@ def list_groups():
 
     # Get groups the user is a member of
     groups = user.groups.order_by(Group.created_at.desc()).all()
-    
+
     # Calculate points for all groups (this ensures existing expenses are counted)
     from services.points_service import PointsService
+
     # Dictionary: group_id -> list of {user_id, user_name, points}
     groups_points_data = {}
     for group in groups:
@@ -44,28 +44,35 @@ def list_groups():
             PointsService.calculate_points_for_group(group.id)
         except Exception as e:
             print(f"Failed to calculate points for group {group.id}: {e}")
-        
+
         # Get all points for this group
         all_points = PointsService.get_all_points_for_group(group.id)
-        
+
         # Create list of members with their points
         members_with_points = []
         for member in group.members:
             points = all_points.get(member.id, 0)
             if points > 0:  # Only show members who have points
-                members_with_points.append({
-                    'user_id': member.id,
-                    'name': member.display_name or member.email,
-                    'email': member.email,
-                    'points': points,
-                    'is_current_user': member.id == user_id
-                })
-        
+                members_with_points.append(
+                    {
+                        "user_id": member.id,
+                        "name": member.display_name or member.email,
+                        "email": member.email,
+                        "points": points,
+                        "is_current_user": member.id == user_id,
+                    }
+                )
+
         # Sort by points descending
-        members_with_points.sort(key=lambda x: x['points'], reverse=True)
+        members_with_points.sort(key=lambda x: x["points"], reverse=True)
         groups_points_data[group.id] = members_with_points
-    
-    return render_template("groups/index.html", groups=groups, groups_points_data=groups_points_data, current_user_id=user_id)
+
+    return render_template(
+        "groups/index.html",
+        groups=groups,
+        groups_points_data=groups_points_data,
+        current_user_id=user_id,
+    )
 
 
 @groups_bp.route("/trend")
@@ -467,6 +474,8 @@ def group_expenses(group_id):
         db.session.commit()
 
         # Recalculate points for the group after adding expense
+        from services.points_service import PointsService
+
         try:
             PointsService.calculate_points_for_group(group_id)
         except Exception as e:
@@ -614,33 +623,36 @@ def group_expenses(group_id):
 
     # Count total transactions
     transaction_count = len(expenses)
-    
+
     # Calculate points for this group (ensures all expenses are counted)
     from services.points_service import PointsService
+
     try:
         PointsService.calculate_points_for_group(group_id)
     except Exception as e:
         print(f"Failed to calculate points for group {group_id}: {e}")
-    
+
     # Get points for all users in this group
     all_group_points = PointsService.get_all_points_for_group(group_id)
-    
+
     # Create list of members with their points
     members_with_points = []
     for member in group.members:
         points = all_group_points.get(member.id, 0)
         if points > 0:  # Only show members who have points
-            members_with_points.append({
-                'user_id': member.id,
-                'name': member.display_name or member.email,
-                'email': member.email,
-                'points': points,
-                'is_current_user': member.id == user_id
-            })
-    
+            members_with_points.append(
+                {
+                    "user_id": member.id,
+                    "name": member.display_name or member.email,
+                    "email": member.email,
+                    "points": points,
+                    "is_current_user": member.id == user_id,
+                }
+            )
+
     # Sort by points descending
-    members_with_points.sort(key=lambda x: x['points'], reverse=True)
-    
+    members_with_points.sort(key=lambda x: x["points"], reverse=True)
+
     # Get points for current user (for backward compatibility)
     current_user_points = PointsService.get_user_points_in_group(user_id, group_id)
 
@@ -794,6 +806,8 @@ def delete_expense(group_id, expense_id):
     db.session.commit()
 
     # Recalculate points for the group after deleting expense
+    from services.points_service import PointsService
+
     try:
         PointsService.calculate_points_for_group(group_id)
     except Exception as e:
@@ -1029,6 +1043,8 @@ def edit_expense(group_id, expense_id):
     db.session.commit()
 
     # Recalculate points for the group after editing expense
+    from services.points_service import PointsService
+
     try:
         PointsService.calculate_points_for_group(group_id)
     except Exception as e:
