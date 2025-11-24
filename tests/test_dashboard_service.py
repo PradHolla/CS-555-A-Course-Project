@@ -260,7 +260,6 @@ def test_get_user_summary_uses_email_fallback(app):
         assert summary["has_data"] is True
 
 
-
 def test_get_user_summary_with_invalid_split_details(app):
     """Test get_user_summary handles invalid JSON in split_details."""
     with app.app_context():
@@ -274,7 +273,7 @@ def test_get_user_summary_with_invalid_split_details(app):
             amount=100.00,
             payer="user@example.com",
             split_type="equal",
-            split_details="{invalid json}"
+            split_details="{invalid json}",
         )
         db.session.add(expense)
         db.session.commit()
@@ -300,7 +299,7 @@ def test_get_user_summary_as_participant_with_invalid_json(app):
             amount=100.00,
             payer="payer@example.com",
             split_type="equal",
-            split_details="{invalid}"
+            split_details="{invalid}",
         )
         db.session.add(expense)
         db.session.commit()
@@ -325,7 +324,7 @@ def test_get_user_summary_with_no_split_details(app):
             amount=50.00,
             payer="user@example.com",
             split_type="equal",
-            split_details=None
+            split_details=None,
         )
         db.session.add(expense)
         db.session.commit()
@@ -352,18 +351,18 @@ def test_get_user_summary_complex_scenario(app):
             amount=90.00,
             payer="user@example.com",
             split_type="equal",
-            split_details='{"user@example.com": 30.0, "other1@example.com": 30.0, "other2@example.com": 30.0}'
+            split_details='{"user@example.com": 30.0, "other1@example.com": 30.0, "other2@example.com": 30.0}',
         )
-        
+
         # Other1 paid an expense
         expense2 = Expense(
             description="Other1 paid",
             amount=60.00,
             payer="other1@example.com",
             split_type="equal",
-            split_details='{"user@example.com": 20.0, "other1@example.com": 20.0, "other2@example.com": 20.0}'
+            split_details='{"user@example.com": 20.0, "other1@example.com": 20.0, "other2@example.com": 20.0}',
         )
-        
+
         db.session.add_all([expense1, expense2])
         db.session.commit()
 

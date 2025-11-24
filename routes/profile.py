@@ -103,14 +103,13 @@ def delete_picture():
     return redirect(url_for("profile.view_profile"))
 
 
-
 @profile_bp.route("/notification-preferences", methods=["PATCH", "POST"])
 @login_required
 def update_notification_preferences():
     """Update user's notification preferences."""
     user_id = session.get("user_id")
     user = db.session.get(User, user_id)
-    
+
     # Support both JSON and form data
     if request.is_json:
         data = request.get_json()
@@ -121,39 +120,41 @@ def update_notification_preferences():
         if daily_enabled is not None:
             daily_enabled = daily_enabled.lower() in ["true", "1", "on", "yes"]
         is_ajax = False
-    
+
     # Validate input
     if daily_enabled is None:
         if is_ajax:
             return jsonify({"error": "Missing dailyExpenseNotificationsEnabled field"}), 400
         flash("Invalid notification preference", "error")
         return redirect(url_for("profile.view_profile"))
-    
+
     # Update preference
     try:
         user.daily_reminder_enabled = daily_enabled
         db.session.commit()
-        
+
         status = "enabled" if daily_enabled else "disabled"
         message = f"Daily notifications {status} successfully"
-        
+
         if is_ajax:
-            return jsonify({
-                "message": message,
-                "data": {
-                    "user_id": user.id,
-                    "email": user.email,
-                    "daily_reminder_enabled": user.daily_reminder_enabled
+            return jsonify(
+                {
+                    "message": message,
+                    "data": {
+                        "user_id": user.id,
+                        "email": user.email,
+                        "daily_reminder_enabled": user.daily_reminder_enabled,
+                    },
                 }
-            }), 200
+            ), 200
         else:
             flash(message, "success")
             return redirect(url_for("profile.view_profile"))
-            
+
     except Exception as e:
         db.session.rollback()
         error_msg = f"Failed to update notification preference: {str(e)}"
-        
+
         if is_ajax:
             return jsonify({"error": error_msg}), 500
         else:

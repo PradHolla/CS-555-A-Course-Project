@@ -1,6 +1,5 @@
 """Tests for payment reminder routes."""
 
-import pytest
 from unittest.mock import patch
 
 from extensions import db
@@ -274,7 +273,7 @@ def test_send_reminder_handles_notification_exception(client, app):
     # Mock notification service to raise exception
     with patch("routes.expenses.notify_debtor_reminder") as mock_notify:
         mock_notify.side_effect = Exception("Email service unavailable")
-        
+
         # Send reminder
         response = client.post(f"/send-reminder/{debtor_id}", follow_redirects=True)
 
@@ -296,6 +295,7 @@ def test_balance_summary_with_group_filter(client, app):
 
         # Create group with required created_by_id
         from models import Group
+
         group = Group(name="Test Group", created_by_id=user1_id)
         db.session.add(group)
         db.session.commit()

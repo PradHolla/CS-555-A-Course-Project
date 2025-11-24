@@ -34,7 +34,7 @@ class ReminderService:
             if not user_id:
                 logger.warning("Invalid user_id provided (None or 0)")
                 return (0, None)
-            
+
             user = db.session.get(User, user_id)
             if not user:
                 logger.warning(f"User {user_id} not found")
@@ -49,12 +49,16 @@ class ReminderService:
             # Check for both email and display name in split_details
             unpaid_expenses = []
             all_expenses = Expense.query.order_by(Expense.created_at.asc()).all()
-            
+
             for expense in all_expenses:
                 # Check if user is in split_details (by email or display name)
-                if user_email in expense.split_details or (user_display_name and user_display_name in expense.split_details):
+                if user_email in expense.split_details or (
+                    user_display_name and user_display_name in expense.split_details
+                ):
                     # Check if user is NOT the payer (compare with both email and display name)
-                    if expense.payer != user_email and (not user_display_name or expense.payer != user_display_name):
+                    if expense.payer != user_email and (
+                        not user_display_name or expense.payer != user_display_name
+                    ):
                         unpaid_expenses.append(expense)
 
             if not unpaid_expenses:
@@ -130,9 +134,7 @@ class ReminderService:
                             )
 
                 except Exception as e:
-                    logger.error(
-                        f"Error processing user {user.email} for reminders: {str(e)}"
-                    )
+                    logger.error(f"Error processing user {user.email} for reminders: {str(e)}")
                     continue
 
             logger.info(f"Found {len(users_to_remind)} users needing reminders")
@@ -166,12 +168,16 @@ class ReminderService:
             # Get all expenses where user is participant but not payer
             unpaid_expenses = []
             all_expenses = Expense.query.all()
-            
+
             for expense in all_expenses:
                 # Check if user is in split_details (by email or display name)
-                if user_email in expense.split_details or (user_display_name and user_display_name in expense.split_details):
+                if user_email in expense.split_details or (
+                    user_display_name and user_display_name in expense.split_details
+                ):
                     # Check if user is NOT the payer
-                    if expense.payer != user_email and (not user_display_name or expense.payer != user_display_name):
+                    if expense.payer != user_email and (
+                        not user_display_name or expense.payer != user_display_name
+                    ):
                         unpaid_expenses.append(expense)
 
             # Group by creditor (payer) and sum amounts owed
@@ -187,7 +193,9 @@ class ReminderService:
 
                     # Find user's share in the split (check both email and display name)
                     for participant, amount in split_details.items():
-                        if participant == user_email or (user_display_name and participant == user_display_name):
+                        if participant == user_email or (
+                            user_display_name and participant == user_display_name
+                        ):
                             user_share = float(amount)
                             break
 
@@ -259,9 +267,7 @@ class ReminderService:
             logger.info(f"Starting reminder process with {days_threshold} day threshold")
 
             # Get users who need reminders
-            users_needing_reminders = ReminderService.get_users_needing_reminders(
-                days_threshold
-            )
+            users_needing_reminders = ReminderService.get_users_needing_reminders(days_threshold)
 
             if not users_needing_reminders:
                 logger.info("No users need reminders at this time")
@@ -302,16 +308,12 @@ class ReminderService:
                 except Exception as e:
                     error_msg = f"Failed to send reminder to {user.email}: {str(e)}"
                     logger.error(error_msg)
-                    errors.append(
-                        {"user": user.email, "error": str(e), "balance": balance_amount}
-                    )
+                    errors.append({"user": user.email, "error": str(e), "balance": balance_amount})
                     # Continue processing other users
                     continue
 
             # Log summary
-            logger.info(
-                f"Reminder process completed: {reminders_sent} sent, {len(errors)} errors"
-            )
+            logger.info(f"Reminder process completed: {reminders_sent} sent, {len(errors)} errors")
 
             return {
                 "reminders_sent": reminders_sent,

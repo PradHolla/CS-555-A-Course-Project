@@ -29,14 +29,14 @@ def test_payment_email_includes_all_required_fields(client, app):
     """
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="neha@example.com", display_name="Neha")
         recipient = User(email="john@example.com", display_name="John")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
-        
+
         # Create an expense so there's a debt to settle
         expense = Expense(
             description="Shared expense",
@@ -221,14 +221,14 @@ def test_email_sent_on_settlement_creation(client, app):
     """
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="iris@example.com")
         recipient = User(email="jack@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
-        
+
         # Create an expense so there's a debt to settle
         expense = Expense(
             description="Shared expense",
@@ -344,7 +344,7 @@ def test_multiple_payments_send_separate_emails(client, app):
     """
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="olivia@example.com")
         recipient1 = User(email="paul@example.com")
         recipient2 = User(email="quinn@example.com")
@@ -353,7 +353,7 @@ def test_multiple_payments_send_separate_emails(client, app):
         payer_id = payer.id
         recipient1_id = recipient1.id
         recipient2_id = recipient2.id
-        
+
         # Create expenses so there are debts to settle
         expense1 = Expense(
             description="Expense 1",

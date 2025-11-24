@@ -65,8 +65,8 @@ class TestGroupSettings:
         assert b"Test Group" in response.data
         assert b"Group Picture" in response.data
 
-    def test_group_settings_shows_placeholders(self, client, auth_user, app):
-        """Test that settings page shows placeholder sections."""
+    def test_group_settings_shows_sections(self, client, auth_user, app):
+        """Test that settings page shows all functional sections."""
         with client.session_transaction() as sess:
             sess["user_id"] = auth_user.id
             sess["user_email"] = auth_user.email
@@ -79,9 +79,13 @@ class TestGroupSettings:
 
         response = client.get(f"/groups/{group.id}/settings")
         assert response.status_code == 200
+        # Check for section headers
+        assert b"Group Picture" in response.data
         assert b"Edit Group Name" in response.data
         assert b"Manage Members" in response.data
-        assert b"Coming soon" in response.data
+        # Check for actual functionality (not placeholders)
+        assert b"edit-name" in response.data  # Edit name form action
+        assert b"invite-members" in response.data  # Invite members form action
 
 
 class TestGroupPictureUpload:
@@ -559,3 +563,565 @@ class TestGroupAvatarIntegration:
         assert response.status_code == 200
         assert b"Settings" in response.data
         assert f"/groups/{group.id}/settings".encode() in response.data
+
+
+class TestMemberManagement:
+    """Tests for inviting members to groups."""
+
+    def test_invite_members_requires_login(self, client):
+        """Test that invite members requires authentication."""
+        response = client.post("/groups/1/invite-members", data={"member_emails": "test@test.com"})
+        assert response.status_code == 302
+        assert "/auth/login" in response.location
+
+    def test_invite_members_nonexistent_group(self, client, auth_user):
+        """Test inviting members to nonexistent group."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        response = client.post(
+            "/groups/99999/invite-members",
+            data={"member_emails": "test@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Group not found" in response.data
+
+    def test_invite_members_non_member(self, client, auth_user):
+        """Test that non-members cannot invite members."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        # Create another user and group
+        other_user = User(email="other@test.com")
+        db.session.add(other_user)
+        db.session.commit()
+
+        group = Group(name="Other Group", created_by_id=other_user.id)
+        group.members.append(other_user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "test@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"not a member" in response.data
+
+    def test_invite_members_empty_emails(self, client, auth_user):
+        """Test inviting with empty email list."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members", data={"member_emails": ""}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"Please enter at least one email" in response.data
+
+    def test_invite_members_invalid_email(self, client, auth_user):
+        """Test inviting with invalid email format."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "notanemail"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Invalid email format" in response.data
+
+    def test_invite_members_single_email(self, client, auth_user):
+        """Test successfully inviting a single member."""
+        from models import GroupInvitation
+
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "newuser@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"1 invitation(s) sent successfully" in response.data
+
+        # Verify invitation was created
+        invitation = GroupInvitation.query.filter_by(
+            email="newuser@test.com", group_id=group.id
+        ).first()
+        assert invitation is not None
+        assert invitation.status == "pending"
+
+    def test_invite_members_multiple_emails(self, client, auth_user):
+        """Test inviting multiple members at once."""
+        from models import GroupInvitation
+
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "user1@test.com, user2@test.com, user3@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"3 invitation(s) sent successfully" in response.data
+
+        # Verify all invitations were created
+        invitations = GroupInvitation.query.filter_by(group_id=group.id).all()
+        assert len(invitations) == 3
+        emails = {inv.email for inv in invitations}
+        assert "user1@test.com" in emails
+        assert "user2@test.com" in emails
+        assert "user3@test.com" in emails
+
+    def test_invite_members_already_member(self, client, auth_user):
+        """Test inviting user who is already a member."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        existing_member = User(email="existing@test.com")
+        db.session.add(existing_member)
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        group.members.append(existing_member)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "existing@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Already members" in response.data
+
+    def test_invite_members_already_invited(self, client, auth_user):
+        """Test inviting user who already has pending invitation."""
+        from models import GroupInvitation
+
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        # Create existing invitation
+        invitation = GroupInvitation(
+            email="invited@test.com", group_id=group.id, invited_by_id=user.id
+        )
+        db.session.add(invitation)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "invited@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Already invited" in response.data
+
+    def test_invite_members_mixed_scenario(self, client, auth_user):
+        """Test inviting mix of new, existing members, and already invited."""
+        from models import GroupInvitation
+
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        existing_member = User(email="member@test.com")
+        db.session.add(existing_member)
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        group.members.append(existing_member)
+        db.session.add(group)
+        db.session.commit()
+
+        # Create existing invitation
+        invitation = GroupInvitation(
+            email="invited@test.com", group_id=group.id, invited_by_id=user.id
+        )
+        db.session.add(invitation)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "newuser@test.com, member@test.com, invited@test.com"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"1 invitation(s) sent successfully" in response.data
+        assert b"Already members" in response.data
+        assert b"Already invited" in response.data
+
+    def test_settings_page_shows_invite_ui(self, client, auth_user):
+        """Test that settings page shows invite members UI."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.get(f"/groups/{group.id}/settings")
+        assert response.status_code == 200
+        assert b"Invite New Members" in response.data
+        assert b"Email Addresses" in response.data
+        assert b"Send Invitations" in response.data
+        assert b"Current Members" in response.data
+
+    def test_settings_page_shows_all_members(self, client, auth_user):
+        """Test that settings page displays all group members."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        member1 = User(email="member1@test.com", display_name="Member One")
+        member2 = User(email="member2@test.com", display_name="Member Two")
+        db.session.add(member1)
+        db.session.add(member2)
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        group.members.append(member1)
+        group.members.append(member2)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.get(f"/groups/{group.id}/settings")
+        assert response.status_code == 200
+        assert b"Current Members (3)" in response.data
+        assert b"member1@test.com" in response.data
+        assert b"member2@test.com" in response.data
+        assert b"Member One" in response.data
+        assert b"Member Two" in response.data
+
+    def test_settings_page_marks_creator(self, client, auth_user):
+        """Test that settings page marks the group creator."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        other_member = User(email="other@test.com", display_name="Other Member")
+        db.session.add(other_member)
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        group.members.append(other_member)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.get(f"/groups/{group.id}/settings")
+        assert response.status_code == 200
+        assert b"Creator" in response.data
+
+
+class TestEditGroupName:
+    """Tests for editing group name."""
+
+    def test_edit_group_name_requires_login(self, client):
+        """Test that edit group name requires authentication."""
+        response = client.post("/groups/1/edit-name", data={"group_name": "New Name"})
+        assert response.status_code == 302
+        assert "/auth/login" in response.location
+
+    def test_edit_group_name_nonexistent_group(self, client, auth_user):
+        """Test editing name for nonexistent group."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        response = client.post(
+            "/groups/99999/edit-name", data={"group_name": "New Name"}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"Group not found" in response.data
+
+    def test_edit_group_name_non_member(self, client, auth_user):
+        """Test that non-members cannot edit group name."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        # Create another user and group
+        other_user = User(email="other@test.com")
+        db.session.add(other_user)
+        db.session.commit()
+
+        group = Group(name="Other Group", created_by_id=other_user.id)
+        group.members.append(other_user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name", data={"group_name": "New Name"}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"not a member" in response.data
+
+    def test_edit_group_name_empty_name(self, client, auth_user):
+        """Test editing with empty name."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name", data={"group_name": ""}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"cannot be empty" in response.data
+
+        # Verify name wasn't changed
+        db.session.expire_all()
+        updated_group = db.session.get(Group, group.id)
+        assert updated_group.name == "Test Group"
+
+    def test_edit_group_name_whitespace_only(self, client, auth_user):
+        """Test editing with whitespace-only name."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name", data={"group_name": "   "}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"cannot be empty" in response.data
+
+    def test_edit_group_name_too_long(self, client, auth_user):
+        """Test editing with name exceeding max length."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        long_name = "A" * 101  # Exceeds 100 character limit
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name", data={"group_name": long_name}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"100 characters or less" in response.data
+
+    def test_edit_group_name_success(self, client, auth_user):
+        """Test successfully editing group name."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Old Name", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name", data={"group_name": "New Name"}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"Group renamed" in response.data
+        assert b"Old Name" in response.data
+        assert b"New Name" in response.data
+
+        # Verify name was actually changed in database
+        db.session.expire_all()
+        updated_group = db.session.get(Group, group.id)
+        assert updated_group.name == "New Name"
+
+    def test_edit_group_name_max_length_allowed(self, client, auth_user):
+        """Test editing with exactly 100 characters (max allowed)."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        max_name = "A" * 100  # Exactly 100 characters
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name", data={"group_name": max_name}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert b"Group renamed" in response.data
+
+        # Verify name was changed
+        db.session.expire_all()
+        updated_group = db.session.get(Group, group.id)
+        assert updated_group.name == max_name
+
+    def test_edit_group_name_trims_whitespace(self, client, auth_user):
+        """Test that leading/trailing whitespace is trimmed."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name",
+            data={"group_name": "  New Name  "},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Group renamed" in response.data
+
+        # Verify whitespace was trimmed
+        db.session.expire_all()
+        updated_group = db.session.get(Group, group.id)
+        assert updated_group.name == "New Name"
+
+    def test_edit_group_name_any_member_can_edit(self, client, auth_user):
+        """Test that any group member (not just creator) can edit name."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        # Create group with different creator
+        creator = User(email="creator@test.com")
+        db.session.add(creator)
+        db.session.commit()
+
+        # Refresh auth_user to get it in the current session
+        user = db.session.get(User, auth_user.id)
+
+        group = Group(name="Test Group", created_by_id=creator.id)
+        group.members.append(creator)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name",
+            data={"group_name": "Renamed by Member"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Group renamed" in response.data
+
+        # Verify name was changed
+        db.session.expire_all()
+        updated_group = db.session.get(Group, group.id)
+        assert updated_group.name == "Renamed by Member"
+
+    def test_edit_group_name_with_special_characters(self, client, auth_user):
+        """Test editing with special characters in name."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        special_name = "Team #1 - Best Group! 🎉"
+
+        response = client.post(
+            f"/groups/{group.id}/edit-name",
+            data={"group_name": special_name},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Group renamed" in response.data
+
+        # Verify name was changed
+        db.session.expire_all()
+        updated_group = db.session.get(Group, group.id)
+        assert updated_group.name == special_name
+
+    def test_settings_page_shows_edit_name_form(self, client, auth_user):
+        """Test that settings page shows edit name form."""
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+
+        user = db.session.get(User, auth_user.id)
+        group = Group(name="Test Group", created_by_id=user.id)
+        group.members.append(user)
+        db.session.add(group)
+        db.session.commit()
+
+        response = client.get(f"/groups/{group.id}/settings")
+        assert response.status_code == 200
+        assert b"Edit Group Name" in response.data
+        assert b"group_name" in response.data
+        assert b"Save Name" in response.data
+        assert b"Test Group" in response.data  # Current name should be in input

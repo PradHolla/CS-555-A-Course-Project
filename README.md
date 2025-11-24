@@ -73,7 +73,7 @@ To get a local copy up and running, follow these simple steps.
 
 1.  **Clone the repo**
     ```sh
-    git clone [your-repo-link]
+    git clone https://github.com/PradHolla/CS-555-A-Course-Project.git
     cd CS-555-A-Course-Project
     ```
 

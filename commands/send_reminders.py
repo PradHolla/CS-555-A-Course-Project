@@ -22,13 +22,14 @@ Examples:
 import sys
 from pathlib import Path
 
+import click
+
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import click
-from app import create_app
-from services.reminder_service import ReminderService
+from app import create_app  # noqa: E402
+from services.reminder_service import ReminderService  # noqa: E402
 
 
 @click.command()
@@ -53,9 +54,7 @@ def send_reminders(days, dry_run, verbose):
     with app.app_context():
         try:
             if dry_run:
-                click.echo(
-                    f"🔍 DRY RUN: Checking for users needing reminders (>{days} days)..."
-                )
+                click.echo(f"🔍 DRY RUN: Checking for users needing reminders (>{days} days)...")
                 click.echo()
 
                 users = ReminderService.get_users_needing_reminders(days)
@@ -87,9 +86,7 @@ def send_reminders(days, dry_run, verbose):
                         if breakdown:
                             click.echo("     📋 Breakdown:")
                             for debt in breakdown:
-                                click.echo(
-                                    f"        • {debt['creditor']}: ${debt['amount']:.2f}"
-                                )
+                                click.echo(f"        • {debt['creditor']}: ${debt['amount']:.2f}")
 
                     click.echo()
 

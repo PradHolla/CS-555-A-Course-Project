@@ -20,7 +20,9 @@ class User(db.Model):
     otp = db.Column(db.String(6), nullable=True)
     otp_expiry = db.Column(db.DateTime, nullable=True)
     profile_picture = db.Column(db.String(255), nullable=True)  # Filename for profile picture
-    daily_reminder_enabled = db.Column(db.Boolean, default=True, nullable=False)  # Daily reminder preference
+    daily_reminder_enabled = db.Column(
+        db.Boolean, default=True, nullable=False
+    )  # Daily reminder preference
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Many-to-many relationship with Groups
@@ -176,7 +178,11 @@ class UserGroupPoints(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     group_id = db.Column(db.Integer, db.ForeignKey("group.id"), nullable=False)
     points = db.Column(db.Integer, default=0, nullable=False)
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     # Relationships
     user = db.relationship("User", backref="group_points")

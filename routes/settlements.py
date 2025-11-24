@@ -18,16 +18,13 @@ def create():
         payer_id = int(request.form.get("payer_id"))
         recipient_id = int(request.form.get("recipient_id"))
         note = request.form.get("note") or None
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError):
         flash("Invalid settlement data provided.", "error")
         return redirect(url_for("expenses.balance_summary"))
 
     # Use settlement service to create with validation
     success, settlement, error = SettlementService.create_settlement(
-        payer_id=payer_id,
-        recipient_id=recipient_id,
-        amount=amount,
-        note=note
+        payer_id=payer_id, recipient_id=recipient_id, amount=amount, note=note
     )
 
     if not success:
@@ -40,14 +37,13 @@ def create():
     # Get user names for flash message
     payer_name = settlement.payer.display_name or settlement.payer.email
     recipient_name = settlement.recipient.display_name or settlement.recipient.email
-    
+
     # Calculate remaining debt after this payment by checking current debt
     # (The settlement we just made is already factored into the balance)
     remaining_debt = SettlementService.get_debt_between_users(
-        settlement.payer.email, 
-        settlement.recipient.email
+        settlement.payer.email, settlement.recipient.email
     )
-    
+
     # Build success message
     if remaining_debt > 0.01:  # Small epsilon for floating point comparison
         message = (
@@ -61,7 +57,7 @@ def create():
             f"All settled up! "
             f"<a href='{url_for('settlements.detail', settlement_id=settlement.id)}' class='underline'>View details</a>"
         )
-    
+
     flash(message, "success")
     return redirect(url_for("expenses.balance_summary"))
 

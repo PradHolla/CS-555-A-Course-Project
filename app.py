@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from flask import Flask
 
 from extensions import db, mail
-from sqlalchemy import text
 
 # Import models to ensure they're registered with SQLAlchemy
 from models import Expense, Settlement, User, UserGroupPoints  # noqa: F401
@@ -46,9 +45,7 @@ def create_app(test_config=None):
     app.config["EMAIL_ENABLED"] = email_enabled
 
     # Reminder system configuration
-    app.config["REMINDER_ENABLED"] = (
-        os.environ.get("REMINDER_ENABLED", "true").lower() == "true"
-    )
+    app.config["REMINDER_ENABLED"] = os.environ.get("REMINDER_ENABLED", "true").lower() == "true"
     app.config["REMINDER_DAYS_THRESHOLD"] = int(os.environ.get("REMINDER_DAYS_THRESHOLD", "7"))
     app.config["APP_URL"] = os.environ.get("APP_URL", "http://localhost:5000")
 
@@ -112,25 +109,29 @@ def init_db(app):
 
                 cur.execute("PRAGMA table_info('user')")
                 user_cols = [row[1] for row in cur.fetchall()]
-                if 'profile_picture' not in user_cols:
-                    cur.execute('ALTER TABLE user ADD COLUMN profile_picture VARCHAR(200)')
+                if "profile_picture" not in user_cols:
+                    cur.execute("ALTER TABLE user ADD COLUMN profile_picture VARCHAR(200)")
 
                 cur.execute("PRAGMA table_info('group')")
                 group_cols = [row[1] for row in cur.fetchall()]
-                if 'profile_picture' not in group_cols:
+                if "profile_picture" not in group_cols:
                     # group is a reserved word; quote it with double quotes for SQLite
                     cur.execute('ALTER TABLE "group" ADD COLUMN profile_picture VARCHAR(200)')
 
                 # Add daily_reminder_enabled column if not exists
-                if 'daily_reminder_enabled' not in user_cols:
-                    cur.execute('ALTER TABLE user ADD COLUMN daily_reminder_enabled BOOLEAN NOT NULL DEFAULT 1')
+                if "daily_reminder_enabled" not in user_cols:
+                    cur.execute(
+                        "ALTER TABLE user ADD COLUMN daily_reminder_enabled BOOLEAN NOT NULL DEFAULT 1"
+                    )
 
                 # Check if user_group_points table exists
-                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_group_points'")
+                cur.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='user_group_points'"
+                )
                 if not cur.fetchone():
                     # Table doesn't exist, db.create_all() should have created it, but let's verify
                     print("Note: user_group_points table should be created by db.create_all()")
-                
+
                 conn.commit()
                 conn.close()
         except Exception as e:
