@@ -1,6 +1,5 @@
 """Service for managing user points in groups."""
 
-
 from extensions import db
 from models import Expense, UserGroupPoints
 from services.expense_service import ExpenseService

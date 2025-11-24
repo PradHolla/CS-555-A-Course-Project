@@ -166,9 +166,11 @@ def update_notification_preferences():
 @login_required
 def delete_account():
     """Delete the user's account after validation."""
-    from services.expense_service import ExpenseService
     import os
+
     from flask import current_app
+
+    from services.expense_service import ExpenseService
 
     user_id = session.get("user_id")
     user = db.session.get(User, user_id)

@@ -371,9 +371,11 @@ def test_delete_account_removes_user_from_groups(client, app):
 def test_delete_account_deletes_profile_picture(client, app, tmp_path):
     """Test that deleting account also deletes profile picture file."""
     # Arrange
-    from extensions import db
     import os
+
     from flask import current_app
+
+    from extensions import db
 
     with app.app_context():
         # Create user with profile picture
@@ -628,4 +630,3 @@ def test_delete_account_allowed_after_settling_all_balances(client, app):
     with app.app_context():
         user = db.session.get(User, user1_id)
         assert user is None
-
