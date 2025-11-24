@@ -349,3 +349,87 @@ class ExpenseService:
                 return False, f"Share count for {participant} must be positive"
 
         return True, None
+
+    @staticmethod
+    def get_user_balance_in_group(user_email, group_id):
+        """
+        Calculate a user's net balance within a specific group.
+
+        Args:
+            user_email: Email of the user
+            group_id: ID of the group
+
+        Returns:
+            float: User's balance (positive = owed money, negative = owes money)
+        """
+        from models import Expense, Settlement
+
+        # Get all expenses for this group
+        expenses = Expense.query.filter_by(group_id=group_id).all()
+
+        # Get all settlements (we need to filter by group participants)
+        settlements = Settlement.query.all()
+
+        # Calculate balances for the group
+        balance_data = ExpenseService.calculate_balances(expenses, settlements)
+
+        # Return this user's balance (0 if not in balance data)
+        return balance_data["balances"].get(user_email, 0.0)
+
+    @staticmethod
+    def get_user_total_balance(user_email):
+        """
+        Calculate a user's net balance across ALL groups.
+
+        Args:
+            user_email: Email of the user
+
+        Returns:
+            float: User's total balance (positive = owed money, negative = owes money)
+        """
+        from models import Expense, Settlement
+
+        # Get all expenses
+        expenses = Expense.query.all()
+
+        # Get all settlements
+        settlements = Settlement.query.all()
+
+        # Calculate balances across all expenses
+        balance_data = ExpenseService.calculate_balances(expenses, settlements)
+
+        # Return this user's balance (0 if not in balance data)
+        return balance_data["balances"].get(user_email, 0.0)
+
+    @staticmethod
+    def has_outstanding_balance_in_group(user_email, group_id):
+        """
+        Check if a user has any outstanding balance (owes or is owed) in a specific group.
+
+        Args:
+            user_email: Email of the user
+            group_id: ID of the group
+
+        Returns:
+            Tuple of (has_balance, balance_amount)
+        """
+        balance = ExpenseService.get_user_balance_in_group(user_email, group_id)
+        # Consider balances > $0.01 or < -$0.01 as outstanding (to handle floating point)
+        has_balance = abs(balance) > 0.01
+        return has_balance, balance
+
+    @staticmethod
+    def has_outstanding_balance(user_email):
+        """
+        Check if a user has any outstanding balance (owes or is owed) across ALL groups.
+
+        Args:
+            user_email: Email of the user
+
+        Returns:
+            Tuple of (has_balance, balance_amount)
+        """
+        balance = ExpenseService.get_user_total_balance(user_email)
+        # Consider balances > $0.01 or < -$0.01 as outstanding (to handle floating point)
+        has_balance = abs(balance) > 0.01
+        return has_balance, balance

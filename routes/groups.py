@@ -1302,6 +1302,25 @@ def leave_group(group_id):
         flash("The group creator cannot leave the group.", "error")
         return redirect(url_for("groups.group_expenses", group_id=group_id))
 
+    # Check if user has outstanding balances in this group
+    has_balance, balance_amount = ExpenseService.has_outstanding_balance_in_group(
+        user.email, group_id
+    )
+    if has_balance:
+        if balance_amount < 0:
+            flash(
+                f"You cannot leave the group because you owe ${abs(balance_amount):.2f}. "
+                "Please settle your debts before leaving.",
+                "error",
+            )
+        else:
+            flash(
+                f"You cannot leave the group because you are owed ${balance_amount:.2f}. "
+                "Please settle all balances before leaving.",
+                "error",
+            )
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
     # Remove the relationship
     group.members.remove(user)
 
