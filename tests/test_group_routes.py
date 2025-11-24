@@ -3742,3 +3742,174 @@ def test_leave_group_user_not_found_defensive(client, app):
     # Group should still exist, leaver already gone
     updated_group = db.session.get(Group, group.id)
     assert creator in updated_group.members
+
+
+def test_leave_group_blocked_when_user_owes_money(client, app):
+    """Test that user cannot leave group when they owe money."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create expense where leaver owes money
+    expense = Expense(
+        description="Lunch",
+        amount=100.0,
+        payer="creator@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"creator@example.com": 50.0, "leaver@example.com": 50.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You cannot leave the group because you owe $50.00" in response.data
+    assert b"Please settle your debts before leaving" in response.data
+
+    # Verify user is still in group
+    updated_group = db.session.get(Group, group.id)
+    assert leaver in updated_group.members
+
+
+def test_leave_group_blocked_when_user_is_owed_money(client, app):
+    """Test that user cannot leave group when they are owed money."""
+    # Arrange
+    from extensions import db
+    from models import Expense
+
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create expense where leaver is owed money (leaver paid)
+    expense = Expense(
+        description="Dinner",
+        amount=80.0,
+        payer="leaver@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"creator@example.com": 40.0, "leaver@example.com": 40.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You cannot leave the group because you are owed $40.00" in response.data
+    assert b"Please settle all balances before leaving" in response.data
+
+    # Verify user is still in group
+    updated_group = db.session.get(Group, group.id)
+    assert leaver in updated_group.members
+
+
+def test_leave_group_allowed_when_balance_settled(client, app):
+    """Test that user can leave group after settling all balances."""
+    # Arrange
+    from extensions import db
+    from models import Expense, Settlement
+
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+
+    # Create expense where leaver owes money
+    expense = Expense(
+        description="Coffee",
+        amount=20.0,
+        payer="creator@example.com",
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"creator@example.com": 10.0, "leaver@example.com": 10.0}',
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    # Create settlement to fully pay the debt
+    settlement = Settlement(amount=10.0, payer_id=leaver.id, recipient_id=creator.id)
+    db.session.add(settlement)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You have left the group" in response.data
+
+    # Verify user was removed from group
+    updated_group = db.session.get(Group, group.id)
+    assert leaver not in updated_group.members
+    assert creator in updated_group.members
+
+
+def test_leave_group_allowed_when_no_expenses(client, app):
+    """Test that user can leave group when there are no expenses."""
+    # Arrange
+    from extensions import db
+
+    creator = User(email="creator@example.com")
+    leaver = User(email="leaver@example.com")
+    db.session.add_all([creator, leaver])
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=creator.id)
+    group.members.extend([creator, leaver])
+    db.session.add(group)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = leaver.id
+        sess["user_email"] = leaver.email
+
+    # Act
+    response = client.post(f"/groups/{group.id}/leave", follow_redirects=True)
+
+    # Assert
+    assert response.status_code == 200
+    assert b"You have left the group" in response.data
+
+    # Verify user was removed from group
+    updated_group = db.session.get(Group, group.id)
+    assert leaver not in updated_group.members

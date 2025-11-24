@@ -160,3 +160,75 @@ def update_notification_preferences():
         else:
             flash(error_msg, "error")
             return redirect(url_for("profile.view_profile"))
+
+
+@profile_bp.route("/delete-account", methods=["POST"])
+@login_required
+def delete_account():
+    """Delete the user's account after validation."""
+    from services.expense_service import ExpenseService
+    import os
+    from flask import current_app
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+    # User existence is guaranteed by @login_required decorator
+
+    # Check if user has any outstanding balances across all groups
+    has_balance, balance_amount = ExpenseService.has_outstanding_balance(user.email)
+
+    if has_balance:
+        if balance_amount < 0:
+            flash(
+                f"You cannot delete your account because you owe ${abs(balance_amount):.2f}. "
+                "Please settle all your debts before deleting your account.",
+                "error",
+            )
+        else:
+            flash(
+                f"You cannot delete your account because you are owed ${balance_amount:.2f}. "
+                "Please collect all payments before deleting your account.",
+                "error",
+            )
+        return redirect(url_for("profile.view_profile"))
+
+    try:
+        # Delete profile picture file if it exists
+        if user.profile_picture:
+            upload_folder = current_app.config["UPLOAD_FOLDER"]
+            picture_path = os.path.join(upload_folder, user.profile_picture)
+            if os.path.exists(picture_path):
+                try:
+                    os.remove(picture_path)
+                except Exception as e:
+                    # Log but don't fail if file deletion fails
+                    print(f"Failed to delete profile picture: {e}")
+
+        # Delete all settlements involving this user
+        from models import Settlement, UserGroupPoints
+
+        Settlement.query.filter(
+            (Settlement.payer_id == user.id) | (Settlement.recipient_id == user.id)
+        ).delete()
+
+        # Delete all user group points records
+        UserGroupPoints.query.filter_by(user_id=user.id).delete()
+
+        # Remove user from all groups
+        for group in list(user.groups):
+            group.members.remove(user)
+
+        # Delete the user account
+        db.session.delete(user)
+        db.session.commit()
+
+        # Clear session (log out)
+        session.clear()
+
+        flash("Account deleted successfully. We're sorry to see you go!", "success")
+        return redirect(url_for("auth.login"))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to delete account: {str(e)}", "error")
+        return redirect(url_for("profile.view_profile"))
