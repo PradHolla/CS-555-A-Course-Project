@@ -9,7 +9,7 @@ from flask import Flask
 from extensions import db, mail
 
 # Import models to ensure they're registered with SQLAlchemy
-from models import Expense, Settlement, User  # noqa: F401
+from models import Expense, Settlement, User, UserGroupPoints  # noqa: F401
 
 # Load environment variables from .env file
 load_dotenv()
@@ -124,6 +124,12 @@ def init_db(app):
                         "ALTER TABLE user ADD COLUMN daily_reminder_enabled BOOLEAN NOT NULL DEFAULT 1"
                     )
 
+                # Check if user_group_points table exists
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_group_points'")
+                if not cur.fetchone():
+                    # Table doesn't exist, db.create_all() should have created it, but let's verify
+                    print("Note: user_group_points table should be created by db.create_all()")
+                
                 conn.commit()
                 conn.close()
         except Exception as e:

@@ -13,6 +13,7 @@ from services.notification_service import (
     notify_expense_participants,
     notify_group_invitation,
 )
+from services.points_service import PointsService
 from utils.decorators import login_required
 from utils.validators import is_valid_email
 
@@ -32,7 +33,39 @@ def list_groups():
 
     # Get groups the user is a member of
     groups = user.groups.order_by(Group.created_at.desc()).all()
-    return render_template("groups/index.html", groups=groups)
+    
+    # Calculate points for all groups (this ensures existing expenses are counted)
+    from services.points_service import PointsService
+    # Dictionary: group_id -> list of {user_id, user_name, points}
+    groups_points_data = {}
+    for group in groups:
+        # Recalculate points for this group to ensure all expenses are counted
+        try:
+            PointsService.calculate_points_for_group(group.id)
+        except Exception as e:
+            print(f"Failed to calculate points for group {group.id}: {e}")
+        
+        # Get all points for this group
+        all_points = PointsService.get_all_points_for_group(group.id)
+        
+        # Create list of members with their points
+        members_with_points = []
+        for member in group.members:
+            points = all_points.get(member.id, 0)
+            if points > 0:  # Only show members who have points
+                members_with_points.append({
+                    'user_id': member.id,
+                    'name': member.display_name or member.email,
+                    'email': member.email,
+                    'points': points,
+                    'is_current_user': member.id == user_id
+                })
+        
+        # Sort by points descending
+        members_with_points.sort(key=lambda x: x['points'], reverse=True)
+        groups_points_data[group.id] = members_with_points
+    
+    return render_template("groups/index.html", groups=groups, groups_points_data=groups_points_data, current_user_id=user_id)
 
 
 @groups_bp.route("/trend")
@@ -433,6 +466,12 @@ def group_expenses(group_id):
         db.session.add(expense)
         db.session.commit()
 
+        # Recalculate points for the group after adding expense
+        try:
+            PointsService.calculate_points_for_group(group_id)
+        except Exception as e:
+            print(f"Failed to recalculate points: {e}")
+
         # Send email notifications to ALL participants (including the payer)
         participant_list = list(split_details.keys())
         if participant_list:
@@ -575,6 +614,35 @@ def group_expenses(group_id):
 
     # Count total transactions
     transaction_count = len(expenses)
+    
+    # Calculate points for this group (ensures all expenses are counted)
+    from services.points_service import PointsService
+    try:
+        PointsService.calculate_points_for_group(group_id)
+    except Exception as e:
+        print(f"Failed to calculate points for group {group_id}: {e}")
+    
+    # Get points for all users in this group
+    all_group_points = PointsService.get_all_points_for_group(group_id)
+    
+    # Create list of members with their points
+    members_with_points = []
+    for member in group.members:
+        points = all_group_points.get(member.id, 0)
+        if points > 0:  # Only show members who have points
+            members_with_points.append({
+                'user_id': member.id,
+                'name': member.display_name or member.email,
+                'email': member.email,
+                'points': points,
+                'is_current_user': member.id == user_id
+            })
+    
+    # Sort by points descending
+    members_with_points.sort(key=lambda x: x['points'], reverse=True)
+    
+    # Get points for current user (for backward compatibility)
+    current_user_points = PointsService.get_user_points_in_group(user_id, group_id)
 
     return render_template(
         "groups/expenses.html",
@@ -587,6 +655,9 @@ def group_expenses(group_id):
         edit_info=edit_info,
         transaction_count=transaction_count,
         current_user_id=user_id,
+        all_group_points=all_group_points,
+        current_user_points=current_user_points,
+        members_with_points=members_with_points,
     )
 
 
@@ -721,6 +792,12 @@ def delete_expense(group_id, expense_id):
     # Delete the expense
     db.session.delete(expense)
     db.session.commit()
+
+    # Recalculate points for the group after deleting expense
+    try:
+        PointsService.calculate_points_for_group(group_id)
+    except Exception as e:
+        print(f"Failed to recalculate points: {e}")
 
     # Send notifications to other group members (excluding the deleter)
     try:
@@ -950,6 +1027,12 @@ def edit_expense(group_id, expense_id):
     expense.participants = ", ".join(split_details.keys())  # Keep for backward compatibility
     expense.category = category  # Update category (expense_date remains unchanged)
     db.session.commit()
+
+    # Recalculate points for the group after editing expense
+    try:
+        PointsService.calculate_points_for_group(group_id)
+    except Exception as e:
+        print(f"Failed to recalculate points: {e}")
 
     # Send notifications to other group members (excluding the editor)
     try:
