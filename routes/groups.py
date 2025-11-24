@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, timezone
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from sqlalchemy import func
 
 from extensions import db
 from models import Comment, Expense, Group, GroupInvitation, User
@@ -14,7 +15,6 @@ from services.notification_service import (
 )
 from utils.decorators import login_required
 from utils.validators import is_valid_email
-from sqlalchemy import func
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/groups")
 
@@ -80,7 +80,11 @@ def trend():
         # Query sums grouped by payer and month (for per-payer table)
         month_label = func.strftime("%Y-%m", Expense.expense_date)
         per_payer_q = (
-            db.session.query(Expense.payer.label("payer"), month_label.label("month"), func.sum(Expense.amount).label("total"))
+            db.session.query(
+                Expense.payer.label("payer"),
+                month_label.label("month"),
+                func.sum(Expense.amount).label("total"),
+            )
             .filter(Expense.group_id.in_(group_ids))
             .group_by(Expense.payer, month_label)
             .all()
@@ -103,13 +107,24 @@ def trend():
 
         for payer, month_map in data.items():
             total = sum(month_map.get(lbl, 0.0) for lbl in month_labels)
-            rows.append({"payer": payer, "display_name": name_map.get(payer, payer), "months": month_map, "total": total})
+            rows.append(
+                {
+                    "payer": payer,
+                    "display_name": name_map.get(payer, payer),
+                    "months": month_map,
+                    "total": total,
+                }
+            )
 
         rows.sort(key=lambda r: r["total"], reverse=True)
 
         # Category aggregates: count and sum per category
         cat_q = (
-            db.session.query(Expense.category.label("category"), func.count(Expense.id).label("count"), func.sum(Expense.amount).label("amount"))
+            db.session.query(
+                Expense.category.label("category"),
+                func.count(Expense.id).label("count"),
+                func.sum(Expense.amount).label("amount"),
+            )
             .filter(Expense.group_id.in_(group_ids))
             .group_by(Expense.category)
             .all()
@@ -1408,5 +1423,144 @@ def delete_group_picture(group_id):
     except Exception as e:
         db.session.rollback()
         flash(f"Failed to delete picture: {str(e)}", "error")
+
+    return redirect(url_for("groups.group_settings", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/edit-name", methods=["POST"])
+@login_required
+def edit_group_name(group_id):
+    """Edit group name."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Verify membership
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get new group name from form
+    new_name = request.form.get("group_name", "").strip()
+
+    if not new_name:
+        flash("Group name cannot be empty", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    if len(new_name) > 100:
+        flash("Group name must be 100 characters or less", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    try:
+        old_name = group.name
+        group.name = new_name
+        db.session.commit()
+        flash(f"Group renamed from '{old_name}' to '{new_name}'", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to rename group: {str(e)}", "error")
+
+    return redirect(url_for("groups.group_settings", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/invite-members", methods=["POST"])
+@login_required
+def invite_members(group_id):
+    """Invite members to group by email address.
+
+    Similar to group creation flow - sends invitations to provided emails.
+    """
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Verify membership
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get email addresses from form
+    member_emails = request.form.get("member_emails", "").strip()
+
+    if not member_emails:
+        flash("Please enter at least one email address", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    # Parse and validate emails
+    emails = [email.strip() for email in member_emails.split(",") if email.strip()]
+
+    # Validate all email formats first
+    for email in emails:
+        if not is_valid_email(email):
+            flash(f"Invalid email format: {email}", "error")
+            return redirect(url_for("groups.group_settings", group_id=group_id))
+
+    try:
+        invitations_sent = 0
+        already_members = []
+        already_invited = []
+
+        for email in emails:
+            # Check if user is already a member
+            existing_member = User.query.filter_by(email=email).first()
+            if existing_member and existing_member in group.members:
+                already_members.append(email)
+                continue
+
+            # Check if invitation already exists
+            existing_invitation = GroupInvitation.query.filter_by(
+                email=email, group_id=group_id, status="pending"
+            ).first()
+
+            if existing_invitation:
+                already_invited.append(email)
+                continue
+
+            # Create new invitation
+            invitation = GroupInvitation(email=email, group_id=group_id, invited_by_id=user_id)
+            db.session.add(invitation)
+            invitations_sent += 1
+
+            # Send invitation notification
+            try:
+                notify_group_invitation(user.email, email, group.name)
+            except Exception as e:
+                print(f"Failed to send invitation notification to {email}: {e}")
+
+        db.session.commit()
+
+        # Build success message
+        messages = []
+        if invitations_sent > 0:
+            messages.append(f"{invitations_sent} invitation(s) sent successfully!")
+        if already_members:
+            messages.append(f"Already members: {', '.join(already_members)}")
+        if already_invited:
+            messages.append(f"Already invited: {', '.join(already_invited)}")
+
+        if invitations_sent > 0:
+            flash(" | ".join(messages), "success")
+        else:
+            flash(" | ".join(messages), "info")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to send invitations: {str(e)}", "error")
 
     return redirect(url_for("groups.group_settings", group_id=group_id))

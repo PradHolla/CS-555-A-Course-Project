@@ -67,7 +67,7 @@ def notify_settlement_recipient(settlement):
     payer_name = payer.display_name or payer.email
     amount = settlement.amount
     timestamp = settlement.created_at.strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Try to generate URL, fallback if not in request context
     try:
         detail_url = url_for("settlements.detail", settlement_id=settlement.id, _external=True)
@@ -154,12 +154,14 @@ def notify_debtor_reminder(creditor, debtor, amount, breakdown=None):
             body_lines.append(f"  - {expense_desc}: ${expense_amount:.2f}")
         body_lines.append("")
 
-    body_lines.extend([
-        f"You can view your full balance and make a payment here:",
-        f"{balance_url}\n",
-        f"Thanks!",
-        f"{creditor_name}",
-    ])
+    body_lines.extend(
+        [
+            "You can view your full balance and make a payment here:",
+            f"{balance_url}\n",
+            "Thanks!",
+            f"{creditor_name}",
+        ]
+    )
 
     body = "\n".join(body_lines)
 
@@ -171,9 +173,9 @@ def notify_debtor_reminder(creditor, debtor, amount, breakdown=None):
             expense_desc = item.get("description", "Expense")
             expense_amount = item.get("amount", 0)
             breakdown_items += f"<li><strong>{expense_desc}</strong>: ${expense_amount:.2f}</li>"
-        
+
         breakdown_html = f"""
-            <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; 
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px;
                         border-left: 4px solid #ffc107; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #856404;">Expense Details</h3>
                 <ul style="margin: 10px 0; padding-left: 20px;">
@@ -370,9 +372,11 @@ def send_payment_reminder(user, balance_amount, days_outstanding, balance_breakd
 
         user_name = user.display_name or user.email
         total_amount = abs(balance_amount)  # Convert negative to positive for display
-        
+
         # Generate balance page URL (works without request context)
-        balance_url = current_app.config.get("APP_URL", "http://localhost:5000") + "/balance-summary"
+        balance_url = (
+            current_app.config.get("APP_URL", "http://localhost:5000") + "/balance-summary"
+        )
 
         # Create subject line
         subject = f"Payment Reminder: Outstanding Balance of ${total_amount:.2f}"
@@ -441,7 +445,7 @@ This is an automated reminder from your expense splitting application.
 
             <div class="breakdown">
                 <h3 style="margin-top: 0; color: #667eea;">💳 Balance Breakdown:</h3>
-                {''.join([f'<div class="breakdown-item"><strong>{debt["creditor"]}</strong>: ${debt["amount"]:.2f}</div>' for debt in balance_breakdown])}
+                {"".join([f'<div class="breakdown-item"><strong>{debt["creditor"]}</strong>: ${debt["amount"]:.2f}</div>' for debt in balance_breakdown])}
             </div>
 
             <p>Please settle your balance at your earliest convenience to keep your account in good standing.</p>
@@ -469,6 +473,6 @@ This is an automated reminder from your expense splitting application.
         logger.info(f"Payment reminder sent to {user.email} for ${total_amount:.2f}")
 
     except Exception as e:
-        user_email = user.email if user and hasattr(user, 'email') else 'unknown'
+        user_email = user.email if user and hasattr(user, "email") else "unknown"
         logger.error(f"Failed to send payment reminder to {user_email}: {str(e)}")
         raise

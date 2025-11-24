@@ -1,6 +1,5 @@
 """Tests for balance summary page with settlements."""
 
-import pytest
 
 from extensions import db
 from models import Expense, Settlement, User
@@ -99,7 +98,7 @@ def test_balance_summary_hides_fully_settled_debt(client, app):
     response = client.get("/balance-summary")
     assert response.status_code == 200
     response_text = response.data.decode("utf-8")
-    
+
     # After full settlement, the "All Settled! 🎉" message should appear
     assert "All Settled" in response_text and "🎉" in response_text
     # And no transactions should be listed (no settlement buttons/forms)
@@ -136,12 +135,12 @@ def test_balance_cards_reflect_settlements(client, app):
     response = client.get("/balance-summary")
     assert response.status_code == 200
     response_text = response.data.decode("utf-8")
-    
+
     # Alice should be owed $100
     assert "Alice" in response_text
     assert "$100.00" in response_text
     assert "Is owed" in response_text
-    
+
     # Bob should owe $100
     assert "Bob" in response_text
     assert "Owes" in response_text
@@ -163,10 +162,10 @@ def test_balance_cards_reflect_settlements(client, app):
     response = client.get("/balance-summary")
     assert response.status_code == 200
     response_text = response.data.decode("utf-8")
-    
+
     # Alice should now be owed $40 (not $100)
     assert "$40.00" in response_text
-    
+
     # Bob should now owe $40 (not $100)
     # The original $100 should not appear anymore
     assert response_text.count("$100.00") == 0
@@ -188,7 +187,7 @@ def test_balance_cards_reflect_settlements(client, app):
     response = client.get("/balance-summary")
     assert response.status_code == 200
     response_text = response.data.decode("utf-8")
-    
+
     # Both balances should be zero or very close to zero
     # Should show "All Settled" message
     assert "All Settled" in response_text

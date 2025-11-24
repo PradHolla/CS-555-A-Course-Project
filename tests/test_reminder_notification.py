@@ -1,6 +1,5 @@
 """Tests for payment reminder notifications."""
 
-import pytest
 from unittest.mock import patch
 
 from extensions import db
@@ -39,7 +38,9 @@ def test_send_reminder_notification_email_content(app):
             to_email = call_args[0][0]
             subject = call_args[0][1]
             body = call_args[0][2]
-            html_body = call_args[0][3] if len(call_args[0]) > 3 else call_args.kwargs.get("html_body", "")
+            html_body = (
+                call_args[0][3] if len(call_args[0]) > 3 else call_args.kwargs.get("html_body", "")
+            )
 
             # Verify recipient
             assert to_email == "bob@example.com"
@@ -136,7 +137,9 @@ def test_send_reminder_includes_balance_link(app):
             # Check for balance URL
             call_args = mock_send.call_args
             body = call_args[0][2]
-            html_body = call_args[0][3] if len(call_args[0]) > 3 else call_args.kwargs.get("html_body", "")
+            html_body = (
+                call_args[0][3] if len(call_args[0]) > 3 else call_args.kwargs.get("html_body", "")
+            )
 
             assert "balance-summary" in body or "balance" in body.lower()
             assert "balance-summary" in html_body or "balance" in html_body.lower()
@@ -172,9 +175,7 @@ def test_send_reminder_with_empty_breakdown(app):
         # Mock email sending
         with patch("services.notification_service._send_or_log_email") as mock_send:
             # Send reminder with empty breakdown
-            notify_debtor_reminder(
-                creditor=creditor, debtor=debtor, amount=30.00, breakdown=[]
-            )
+            notify_debtor_reminder(creditor=creditor, debtor=debtor, amount=30.00, breakdown=[])
 
             # Verify email was sent
             assert mock_send.called

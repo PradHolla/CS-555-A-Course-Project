@@ -1,6 +1,5 @@
 """Tests for settlement impact on balance calculations."""
 
-import pytest
 from extensions import db
 from models import Expense, Settlement, User
 from services.expense_service import ExpenseService
@@ -28,7 +27,7 @@ def test_settlements_reduce_balance_correctly(app):
         # Calculate initial balance (Bob owes Alice $50)
         expenses = [expense]
         balance_data = ExpenseService.calculate_balances(expenses)
-        
+
         assert balance_data["balances"]["alice@example.com"] == 50.0  # Alice is owed $50
         assert balance_data["balances"]["bob@example.com"] == -50.0  # Bob owes $50
         assert len(balance_data["transactions"]) == 1
@@ -38,10 +37,7 @@ def test_settlements_reduce_balance_correctly(app):
 
         # Bob records a payment of $30 to Alice
         settlement = Settlement(
-            amount=30.0,
-            payer_id=bob.id,
-            recipient_id=alice.id,
-            note="Partial payment"
+            amount=30.0, payer_id=bob.id, recipient_id=alice.id, note="Partial payment"
         )
         db.session.add(settlement)
         db.session.commit()
@@ -49,7 +45,7 @@ def test_settlements_reduce_balance_correctly(app):
         # Calculate balance after settlement (Bob now owes only $20)
         settlements = [settlement]
         balance_data_after = ExpenseService.calculate_balances(expenses, settlements)
-        
+
         assert balance_data_after["balances"]["alice@example.com"] == 20.0  # Alice is owed $20
         assert balance_data_after["balances"]["bob@example.com"] == -20.0  # Bob owes $20
         assert len(balance_data_after["transactions"]) == 1
@@ -77,10 +73,7 @@ def test_complete_settlement_zeroes_balance(app):
 
         # Bob records a complete payment of $50 to Alice
         settlement = Settlement(
-            amount=50.0,
-            payer_id=bob.id,
-            recipient_id=alice.id,
-            note="Full payment"
+            amount=50.0, payer_id=bob.id, recipient_id=alice.id, note="Full payment"
         )
         db.session.add(settlement)
         db.session.commit()
@@ -89,7 +82,7 @@ def test_complete_settlement_zeroes_balance(app):
         expenses = [expense]
         settlements = [settlement]
         balance_data = ExpenseService.calculate_balances(expenses, settlements)
-        
+
         # Both balances should be zero (or very close due to floating point)
         assert abs(balance_data["balances"]["alice@example.com"]) < 0.01
         assert abs(balance_data["balances"]["bob@example.com"]) < 0.01
@@ -126,7 +119,7 @@ def test_multiple_settlements_accumulate(app):
         expenses = [expense]
         settlements = [settlement1, settlement2]
         balance_data = ExpenseService.calculate_balances(expenses, settlements)
-        
+
         # Bob paid $35 total, so he owes $15 more
         assert balance_data["balances"]["alice@example.com"] == 15.0
         assert balance_data["balances"]["bob@example.com"] == -15.0
@@ -151,7 +144,7 @@ def test_settlement_without_expenses_doesnt_crash(app):
         expenses = []
         settlements = [settlement]
         balance_data = ExpenseService.calculate_balances(expenses, settlements)
-        
+
         # Should return empty data since no expenses
         assert balance_data["balances"] == {}
         assert balance_data["transactions"] == []

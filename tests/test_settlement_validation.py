@@ -1,6 +1,5 @@
 """Tests for settlement validation and recording feature."""
 
-import pytest
 
 from extensions import db
 from models import Expense, Settlement, User
@@ -275,7 +274,9 @@ def test_balance_updates_after_settlement(app):
         db.session.commit()
 
         # Check initial debt
-        initial_debt = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        initial_debt = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert initial_debt == 50.0
 
         # Bob pays Alice $30
@@ -283,7 +284,9 @@ def test_balance_updates_after_settlement(app):
         assert success is True
 
         # Check remaining debt
-        remaining_debt = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        remaining_debt = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert remaining_debt == 20.0  # 50 - 30 = 20
 
 
@@ -311,7 +314,9 @@ def test_balance_zero_after_full_settlement(app):
         assert success is True
 
         # Check debt is now zero
-        remaining_debt = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        remaining_debt = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert remaining_debt == 0.0
 
 
@@ -335,21 +340,33 @@ def test_multiple_partial_settlements(app):
         db.session.commit()
 
         # First payment: $40
-        success1, _, _ = SettlementService.create_settlement(bob.id, alice.id, 40.0, "First payment")
+        success1, _, _ = SettlementService.create_settlement(
+            bob.id, alice.id, 40.0, "First payment"
+        )
         assert success1 is True
-        debt_after_first = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        debt_after_first = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert debt_after_first == 60.0
 
         # Second payment: $30
-        success2, _, _ = SettlementService.create_settlement(bob.id, alice.id, 30.0, "Second payment")
+        success2, _, _ = SettlementService.create_settlement(
+            bob.id, alice.id, 30.0, "Second payment"
+        )
         assert success2 is True
-        debt_after_second = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        debt_after_second = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert debt_after_second == 30.0
 
         # Final payment: $30
-        success3, _, _ = SettlementService.create_settlement(bob.id, alice.id, 30.0, "Final payment")
+        success3, _, _ = SettlementService.create_settlement(
+            bob.id, alice.id, 30.0, "Final payment"
+        )
         assert success3 is True
-        debt_after_third = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        debt_after_third = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert debt_after_third == 0.0
 
         # Verify all settlements were created
@@ -359,7 +376,7 @@ def test_multiple_partial_settlements(app):
 def test_settlement_with_custom_split(app):
     """Test settlement validation works with custom split expenses."""
     import json
-    
+
     with app.app_context():
         alice = User(email="alice@example.com", display_name="Alice")
         bob = User(email="bob@example.com", display_name="Bob")
@@ -374,11 +391,13 @@ def test_settlement_with_custom_split(app):
             payer="alice@example.com",
             participants="alice@example.com, bob@example.com, charlie@example.com",
             split_type="custom",
-            split_details=json.dumps({
-                "alice@example.com": 0.0,  # Alice paid, owes nothing
-                "bob@example.com": 50.0,
-                "charlie@example.com": 70.0,
-            }),
+            split_details=json.dumps(
+                {
+                    "alice@example.com": 0.0,  # Alice paid, owes nothing
+                    "bob@example.com": 50.0,
+                    "charlie@example.com": 70.0,
+                }
+            ),
         )
         db.session.add(expense)
         db.session.commit()
@@ -398,7 +417,9 @@ def test_settlement_with_custom_split(app):
         assert success is True
 
         # Verify Bob's debt is cleared
-        bob_remaining = SettlementService.get_debt_between_users("bob@example.com", "alice@example.com")
+        bob_remaining = SettlementService.get_debt_between_users(
+            "bob@example.com", "alice@example.com"
+        )
         assert bob_remaining == 0.0
 
         # Verify Charlie's debt unchanged

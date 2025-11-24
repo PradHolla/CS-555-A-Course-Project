@@ -63,13 +63,13 @@ class ExpenseService:
             for settlement in settlements:
                 payer_email = settlement.payer.email
                 recipient_email = settlement.recipient.email
-                
+
                 # The payer settled some debt, so their balance increases (they owe less)
                 balances[payer_email] = balances.get(payer_email, 0.0) + settlement.amount
-                
+
                 # The recipient received payment, so their balance decreases (they are owed less)
                 balances[recipient_email] = balances.get(recipient_email, 0.0) - settlement.amount
-                
+
                 # Round to avoid floating point issues
                 balances[payer_email] = round(balances[payer_email], 2)
                 balances[recipient_email] = round(balances[recipient_email], 2)

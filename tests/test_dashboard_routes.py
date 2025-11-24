@@ -27,7 +27,7 @@ def test_dashboard_displays_with_data(client, app):
         other_user = User(email="other@example.com", display_name="Other User")
         db.session.add(other_user)
         db.session.flush()
-        
+
         # User paid $50 for groceries, split with other user - other owes $25
         expense1 = Expense(
             description="Groceries",

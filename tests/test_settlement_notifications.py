@@ -25,14 +25,14 @@ def test_settlement_creation_sends_notification_to_recipient(client, app):
     # Arrange
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="neha@example.com")
         recipient = User(email="john@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
-        
+
         # Create an expense so there's a debt to settle
         expense = Expense(
             description="Shared expense",
@@ -91,14 +91,14 @@ def test_settlement_notification_contains_detail_link(client, app):
     # Arrange
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="alice@example.com")
         recipient = User(email="bob@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
-        
+
         # Create an expense so there's a debt to settle
         expense = Expense(
             description="Shared expense",
@@ -139,14 +139,14 @@ def test_settlement_without_note_sends_notification(client, app):
     # Arrange
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="charlie@example.com")
         recipient = User(email="diana@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
-        
+
         # Create an expense so there's a debt to settle
         expense = Expense(
             description="Shared expense",
@@ -226,7 +226,7 @@ def test_multiple_settlements_send_separate_notifications(client, app):
     # Arrange
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="grace@example.com")
         recipient1 = User(email="henry@example.com")
         recipient2 = User(email="iris@example.com")
@@ -235,7 +235,7 @@ def test_multiple_settlements_send_separate_notifications(client, app):
         payer_id = payer.id
         recipient1_id = recipient1.id
         recipient2_id = recipient2.id
-        
+
         # Create expenses so there are debts to settle
         expense1 = Expense(
             description="Expense 1",
@@ -294,14 +294,14 @@ def test_settlement_notification_is_sent(client, app):
     # Arrange
     with app.app_context():
         from models import Expense
-        
+
         payer = User(email="jack@example.com")
         recipient = User(email="kate@example.com")
         db.session.add_all([payer, recipient])
         db.session.commit()
         payer_id = payer.id
         recipient_id = recipient.id
-        
+
         # Create an expense so there's a debt to settle
         expense = Expense(
             description="Shared expense",

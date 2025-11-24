@@ -24,11 +24,29 @@ def test_trend_page_shows_monthly_totals(client, app):
     # Create two expenses in different months
     today = date.today()
     # this month
-    e1 = Expense(description="ThisMonth", amount=25.0, payer=creator.email, group_id=group.id, split_type="equal", split_details='{"trend_creator@example.com": 25.0}', participants=creator.email, expense_date=today)
+    e1 = Expense(
+        description="ThisMonth",
+        amount=25.0,
+        payer=creator.email,
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"trend_creator@example.com": 25.0}',
+        participants=creator.email,
+        expense_date=today,
+    )
     # previous month - safe fallback when month==1
     prev_month_year = today.year if today.month > 1 else today.year - 1
     prev_month = today.month - 1 if today.month > 1 else 12
-    e2 = Expense(description="PrevMonth", amount=15.0, payer=creator.email, group_id=group.id, split_type="equal", split_details='{"trend_creator@example.com": 15.0}', participants=creator.email, expense_date=date(prev_month_year, prev_month, min(28, today.day)))
+    e2 = Expense(
+        description="PrevMonth",
+        amount=15.0,
+        payer=creator.email,
+        group_id=group.id,
+        split_type="equal",
+        split_details='{"trend_creator@example.com": 15.0}',
+        participants=creator.email,
+        expense_date=date(prev_month_year, prev_month, min(28, today.day)),
+    )
 
     db.session.add_all([e1, e2])
     db.session.commit()

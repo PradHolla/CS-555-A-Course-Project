@@ -38,9 +38,9 @@ def test_settlement_create_valid_full_payment(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "Payment recorded!" in response_text or "recorded" in response_text.lower()
-    
+
     # Verify settlement was created
     with app.app_context():
         settlement = Settlement.query.first()
@@ -79,14 +79,19 @@ def test_settlement_create_valid_partial_payment(client, app):
     # Record partial payment of $30
     response = client.post(
         "/settlements",
-        data={"payer_id": bob_id, "recipient_id": alice_id, "amount": "30.00", "note": "Partial payment"},
+        data={
+            "payer_id": bob_id,
+            "recipient_id": alice_id,
+            "amount": "30.00",
+            "note": "Partial payment",
+        },
         follow_redirects=True,
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "Partial payment recorded!" in response_text or "recorded" in response_text.lower()
-    
+
     with app.app_context():
         settlement = Settlement.query.first()
         assert settlement is not None
@@ -128,9 +133,9 @@ def test_settlement_create_exceeds_debt_rejected(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "exceeds the owed amount" in response_text or "exceeds" in response_text.lower()
-    
+
     # Verify no settlement was created
     with app.app_context():
         assert Settlement.query.count() == 0
@@ -159,9 +164,9 @@ def test_settlement_create_no_debt_rejected(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "No debt exists" in response_text or "no debt" in response_text.lower()
-    
+
     with app.app_context():
         assert Settlement.query.count() == 0
 
@@ -198,9 +203,9 @@ def test_settlement_create_zero_amount_rejected(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "must be greater than" in response_text or "greater than 0" in response_text.lower()
-    
+
     with app.app_context():
         assert Settlement.query.count() == 0
 
@@ -237,9 +242,9 @@ def test_settlement_create_negative_amount_rejected(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "must be greater than" in response_text or "greater than 0" in response_text.lower()
-    
+
     with app.app_context():
         assert Settlement.query.count() == 0
 
@@ -266,9 +271,9 @@ def test_settlement_create_invalid_data(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "Invalid settlement data" in response_text or "invalid" in response_text.lower()
-    
+
     with app.app_context():
         assert Settlement.query.count() == 0
 
@@ -308,7 +313,7 @@ def test_settlement_shows_remaining_debt_message(client, app):
 
     assert response.status_code == 200
     # Should show remaining debt message
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "Remaining debt" in response_text and "$40.00" in response_text
 
 
@@ -346,7 +351,7 @@ def test_settlement_shows_settled_message(client, app):
     )
 
     assert response.status_code == 200
-    response_text = response.data.decode('utf-8')
+    response_text = response.data.decode("utf-8")
     assert "All settled up!" in response_text
 
 
@@ -409,7 +414,7 @@ def test_settlement_with_note(client, app):
     )
 
     assert response.status_code == 200
-    
+
     with app.app_context():
         settlement = Settlement.query.first()
         assert settlement is not None

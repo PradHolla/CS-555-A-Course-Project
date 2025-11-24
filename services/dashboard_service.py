@@ -2,7 +2,6 @@
 
 from extensions import db
 from models import Expense, Settlement, User
-from services.expense_service import ExpenseService
 
 
 class DashboardService:
@@ -26,7 +25,7 @@ class DashboardService:
             }
         """
         import json
-        
+
         # Get user object to determine payer identifier
         user = db.session.get(User, user_id)
         if not user:
@@ -39,13 +38,13 @@ class DashboardService:
 
         user_email = user.email
         user_display_name = user.display_name
-        
+
         # Calculate net balance across all expenses
         net_balance = 0.0
-        
+
         # Get all expenses
         all_expenses = Expense.query.all()
-        
+
         for expense in all_expenses:
             # Parse split details using same logic as ExpenseService
             split_details = {}
@@ -54,38 +53,42 @@ class DashboardService:
                     split_details = json.loads(expense.split_details)
                 except (json.JSONDecodeError, TypeError):
                     pass
-            
+
             # Fall back to participants field if no split_details
             if not split_details and expense.participants:
                 participants = [p.strip() for p in expense.participants.split(",") if p.strip()]
                 if participants:
                     share = expense.amount / len(participants)
                     split_details = {participant: share for participant in participants}
-            
+
             # If user is the payer, they are owed money (positive)
             if expense.payer == user_email or expense.payer == user_display_name:
                 if split_details:
                     # Find user's share
                     user_share = 0.0
                     for participant, amount in split_details.items():
-                        if participant == user_email or (user_display_name and participant == user_display_name):
+                        if participant == user_email or (
+                            user_display_name and participant == user_display_name
+                        ):
                             user_share = float(amount)
                             break
-                    
+
                     # User paid the full amount but only owes their share
                     # So they are owed: (total - their_share)
-                    net_balance += (expense.amount - user_share)
+                    net_balance += expense.amount - user_share
                 else:
                     # No split details, user is owed the full amount
                     net_balance += expense.amount
             elif split_details:
                 # User is not the payer, check if they owe money
                 for participant, amount in split_details.items():
-                    if participant == user_email or (user_display_name and participant == user_display_name):
+                    if participant == user_email or (
+                        user_display_name and participant == user_display_name
+                    ):
                         # User didn't pay but owes their share (negative)
                         net_balance -= float(amount)
                         break
-        
+
         # Query expenses where payer matches user (for total_expenses display)
         expenses = Expense.query.filter(
             db.or_(Expense.payer == user.email, Expense.payer == user.display_name)
@@ -99,10 +102,14 @@ class DashboardService:
         # Adjust net_balance for settlements
         # Settlement payments resolve debts that are already counted in net_balance
         # - When user pays a settlement (is payer), they are paying off debt they owe, so outstanding balance increases (less negative / more positive)
-        # - When user receives a settlement (is recipient), someone is paying off debt owed to them, so outstanding balance decreases (less positive / more negative)  
+        # - When user receives a settlement (is recipient), someone is paying off debt owed to them, so outstanding balance decreases (less positive / more negative)
         settlements_received = Settlement.query.filter_by(recipient_id=user_id).all()
-        
-        outstanding_balance = net_balance + sum(s.amount for s in settlements_paid) - sum(s.amount for s in settlements_received)
+
+        outstanding_balance = (
+            net_balance
+            + sum(s.amount for s in settlements_paid)
+            - sum(s.amount for s in settlements_received)
+        )
 
         # Determine if user has any data
         has_data = len(all_expenses) > 0 or len(settlements_paid) > 0

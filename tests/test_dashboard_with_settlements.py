@@ -79,7 +79,7 @@ def test_dashboard_user_owes_money_partial_payment(app):
         bob_summary = DashboardService.get_user_summary(bob.id)
 
         # Bob's perspective:
-        # - Total Expenses Added: $0 
+        # - Total Expenses Added: $0
         # - Total Payments Made: $30
         # - Outstanding Balance: -$20 (Bob still owes $20 to Alice)
         assert bob_summary["total_expenses"] == 0.0
