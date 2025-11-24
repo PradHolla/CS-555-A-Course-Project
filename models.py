@@ -167,3 +167,23 @@ class Comment(db.Model):
 
     def __repr__(self):
         return f"<Comment {self.id} on expense {self.expense_id}>"
+
+
+class UserGroupPoints(db.Model):
+    """Model for tracking points earned by users in groups."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey("group.id"), nullable=False)
+    points = db.Column(db.Integer, default=0, nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = db.relationship("User", backref="group_points")
+    group = db.relationship("Group", backref="member_points")
+
+    # Unique constraint: one record per user per group
+    __table_args__ = (db.UniqueConstraint("user_id", "group_id", name="unique_user_group_points"),)
+
+    def __repr__(self):
+        return f"<UserGroupPoints user_id={self.user_id} group_id={self.group_id} points={self.points}>"
