@@ -346,3 +346,15 @@ class TestEdgeCases:
 
             assert result is not None
             assert len(result["settlements"]) == 0
+
+    def test_format_activity_summary_with_none_input(self, app):
+        """Test format_activity_summary handles None input."""
+        with app.app_context():
+            result = GroupActivityService.format_activity_summary(None)
+            assert result is None
+
+    def test_format_activity_summary_with_empty_dict(self, app):
+        """Test format_activity_summary handles empty dict."""
+        with app.app_context():
+            result = GroupActivityService.format_activity_summary({})
+            assert result is None
