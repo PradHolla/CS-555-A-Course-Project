@@ -684,6 +684,132 @@ class TestExpenseReceiptUpload:
         # Verify file exists
         assert os.path.exists(receipt_filepath)
 
+    def test_upload_handles_la_mode_images(self, client, app):
+        """Test uploading image with LA mode (Luminance with Alpha)."""
+        # Create users and group
+        user1 = User(email="user1@example.com", display_name="User 1")
+        user2 = User(email="user2@example.com", display_name="User 2")
+        from extensions import db
+
+        db.session.add_all([user1, user2])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user1.id)
+        group.members.extend([user1, user2])
+        db.session.add(group)
+        db.session.commit()
+
+        # Create LA mode image (grayscale with alpha)
+        img = Image.new("LA", (500, 500), color=(128, 200))
+        img_io = BytesIO()
+        img.save(img_io, "PNG")
+        img_io.seek(0)
+
+        with client.session_transaction() as session:
+            session["user_id"] = user1.id
+
+        from werkzeug.datastructures import MultiDict
+
+        expense_data = MultiDict(
+            [
+                ("description", "LA Mode Receipt"),
+                ("amount", "20.00"),
+                ("payer", "user1@example.com"),
+                ("split_type", "equal"),
+                ("participants", "user1@example.com"),
+                ("participants", "user2@example.com"),
+                ("receipt_image", (img_io, "la_mode.png")),
+            ]
+        )
+
+        response = client.post(
+            f"/groups/{group.id}",
+            data=expense_data,
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        expense = Expense.query.filter_by(description="LA Mode Receipt").first()
+        receipt_folder = os.path.join("static", "uploads", "receipts")
+        receipt_filepath = os.path.join(receipt_folder, expense.receipt_image)
+
+        # Verify image was converted to RGB and resized
+        with Image.open(receipt_filepath) as saved_img:
+            assert saved_img.mode == "RGB"  # Should be converted from LA
+            assert saved_img.width <= 800
+            assert saved_img.height <= 800
+
+    def test_edit_expense_handles_palette_mode_images(self, client, app):
+        """Test uploading palette mode image when editing expense (covers lines 1144-1148)."""
+        # Create users and group
+        user1 = User(email="user1@example.com", display_name="User 1")
+        user2 = User(email="user2@example.com", display_name="User 2")
+        from extensions import db
+
+        db.session.add_all([user1, user2])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user1.id)
+        group.members.extend([user1, user2])
+        db.session.add(group)
+        db.session.commit()
+
+        # Create expense without receipt
+        expense = Expense(
+            description="Test Expense",
+            amount=25.00,
+            payer="user1@example.com",
+            group_id=group.id,
+            split_type="equal",
+            split_details='{"user1@example.com": 12.5, "user2@example.com": 12.5}',
+            participants="user1@example.com, user2@example.com",
+        )
+        db.session.add(expense)
+        db.session.commit()
+
+        # Create palette mode image (P mode) for edit route
+        img = Image.new("P", (500, 500))
+        img.putpalette([i % 256 for i in range(768)])  # Add a palette
+        img_io = BytesIO()
+        img.save(img_io, "GIF")
+        img_io.seek(0)
+
+        with client.session_transaction() as session:
+            session["user_id"] = user1.id
+
+        from werkzeug.datastructures import MultiDict
+
+        expense_data = MultiDict(
+            [
+                ("description", "Test Expense"),
+                ("amount", "25.00"),
+                ("payer", "user1@example.com"),
+                ("split_type", "equal"),
+                ("participants", "user1@example.com"),
+                ("participants", "user2@example.com"),
+                ("receipt_image", (img_io, "palette.gif")),
+            ]
+        )
+
+        response = client.post(
+            f"/groups/{group.id}/expense/{expense.id}/edit",
+            data=expense_data,
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        expense = db.session.get(Expense, expense.id)
+        receipt_folder = os.path.join("static", "uploads", "receipts")
+        receipt_filepath = os.path.join(receipt_folder, expense.receipt_image)
+
+        # Verify image was processed and resized (P mode conversion path)
+        with Image.open(receipt_filepath) as saved_img:
+            assert saved_img.mode == "RGB"  # Should be converted from P
+            assert saved_img.width <= 800
+            assert saved_img.height <= 800
+
 
 class TestExpenseReceiptDisplay:
     """Tests for displaying receipt images."""
@@ -1344,4 +1470,80 @@ class TestExpenseReceiptDeletionRoute:
 
         assert response.status_code == 302
         assert f"/groups/{group2.id}" in response.location
+
+
+class TestExpenseReceiptExceptionHandling:
+    """Tests for exception handling in receipt upload."""
+
+    def test_edit_expense_receipt_upload_exception_handling(self, client, app, monkeypatch):
+        """Test that exception during receipt upload in edit_expense doesn't crash."""
+        # Create users and group
+        user1 = User(email="user1@example.com", display_name="User 1")
+        user2 = User(email="user2@example.com", display_name="User 2")
+        from extensions import db
+
+        db.session.add_all([user1, user2])
+        db.session.commit()
+
+        group = Group(name="Test Group", created_by_id=user1.id)
+        group.members.extend([user1, user2])
+        db.session.add(group)
+        db.session.commit()
+
+        # Create expense without receipt
+        expense = Expense(
+            description="Test Expense",
+            amount=25.00,
+            payer="user1@example.com",
+            group_id=group.id,
+            split_type="equal",
+            split_details='{"user1@example.com": 12.5, "user2@example.com": 12.5}',
+            participants="user1@example.com, user2@example.com",
+        )
+        db.session.add(expense)
+        db.session.commit()
+
+        # Create test image
+        img = Image.new("RGB", (100, 100), color="red")
+        img_io = BytesIO()
+        img.save(img_io, "JPEG")
+        img_io.seek(0)
+
+        # Mock Image.open to raise an exception
+        def mock_image_open(stream):
+            raise Exception("Image processing failed")
+
+        monkeypatch.setattr("PIL.Image.open", mock_image_open)
+
+        with client.session_transaction() as session:
+            session["user_id"] = user1.id
+
+        from werkzeug.datastructures import MultiDict
+
+        expense_data = MultiDict(
+            [
+                ("description", "Test Expense"),
+                ("amount", "25.00"),
+                ("payer", "user1@example.com"),
+                ("split_type", "equal"),
+                ("participants", "user1@example.com"),
+                ("participants", "user2@example.com"),
+                ("receipt_image", (img_io, "test.jpg")),
+            ]
+        )
+
+        # Should still update expense even if receipt upload fails
+        response = client.post(
+            f"/groups/{group.id}/expense/{expense.id}/edit",
+            data=expense_data,
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        expense = db.session.get(Expense, expense.id)
+        # Expense should be updated
+        assert expense.description == "Test Expense"
+        # Receipt should not be set due to exception
+        assert expense.receipt_image is None
 
