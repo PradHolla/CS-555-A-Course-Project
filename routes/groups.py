@@ -473,6 +473,55 @@ def group_expenses(group_id):
         db.session.add(expense)
         db.session.commit()
 
+        # Handle receipt image upload (optional)
+        if "receipt_image" in request.files:
+            file = request.files["receipt_image"]
+            if file and file.filename != "":
+                import os
+                from PIL import Image
+                from werkzeug.utils import secure_filename
+
+                # Validate file type
+                allowed_extensions = {"png", "jpg", "jpeg", "gif", "webp"}
+                file_ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else ""
+
+                if file_ext in allowed_extensions:
+                    try:
+                        # Generate unique filename
+                        filename = secure_filename(
+                            f"receipt_{expense.id}_{datetime.now(timezone.utc).timestamp()}.{file_ext}"
+                        )
+                        upload_folder = os.path.join("static", "uploads", "receipts")
+                        os.makedirs(upload_folder, exist_ok=True)
+                        filepath = os.path.join(upload_folder, filename)
+
+                        # Open and resize image
+                        img = Image.open(file.stream)
+
+                        # Convert RGBA/LA/P to RGB if necessary
+                        if img.mode in ("RGBA", "LA", "P"):
+                            background = Image.new("RGB", img.size, (255, 255, 255))
+                            if img.mode == "P":
+                                img = img.convert("RGBA")
+                            background.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+                            img = background
+
+                        # Resize to max 800x800 while maintaining aspect ratio
+                        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+
+                        # Save as JPEG with optimization
+                        img.save(filepath, "JPEG", quality=85, optimize=True)
+
+                        # Update expense record with receipt info
+                        expense.receipt_image = filename
+                        expense.receipt_uploaded_by = user.email
+                        expense.receipt_uploaded_at = datetime.now(timezone.utc)
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"Failed to upload receipt image: {str(e)}")
+                        # Don't fail the expense creation if receipt upload fails
+
         # Recalculate points for the group after adding expense
         from services.points_service import PointsService
 
@@ -788,6 +837,7 @@ def delete_expense(group_id, expense_id):
     expense_payer = expense.payer
     expense_participants = expense.participants
     deleter_name = user.display_name or user.email
+    receipt_filename = expense.receipt_image  # Store receipt filename before deletion
 
     # Create a simple object for notification (expense will be deleted)
     class ExpenseInfo:
@@ -804,6 +854,17 @@ def delete_expense(group_id, expense_id):
     # Delete the expense
     db.session.delete(expense)
     db.session.commit()
+
+    # Delete receipt file if it exists
+    if receipt_filename:
+        import os
+        receipt_folder = os.path.join("static", "uploads", "receipts")
+        receipt_filepath = os.path.join(receipt_folder, receipt_filename)
+        if os.path.exists(receipt_filepath):
+            try:
+                os.remove(receipt_filepath)
+            except OSError:
+                pass  # Continue even if file deletion fails
 
     # Recalculate points for the group after deleting expense
     from services.points_service import PointsService
@@ -1042,6 +1103,66 @@ def edit_expense(group_id, expense_id):
     expense.category = category  # Update category (expense_date remains unchanged)
     db.session.commit()
 
+    # Handle receipt image upload (optional) - replaces old receipt if new one is uploaded
+    if "receipt_image" in request.files:
+        file = request.files["receipt_image"]
+        if file and file.filename != "":
+            import os
+            from PIL import Image
+            from werkzeug.utils import secure_filename
+
+            # Validate file type
+            allowed_extensions = {"png", "jpg", "jpeg", "gif", "webp"}
+            file_ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else ""
+
+            if file_ext in allowed_extensions:
+                try:
+                    # Delete old receipt if exists
+                    old_receipt_filename = expense.receipt_image
+                    if old_receipt_filename:
+                        receipt_folder = os.path.join("static", "uploads", "receipts")
+                        old_receipt_filepath = os.path.join(receipt_folder, old_receipt_filename)
+                        if os.path.exists(old_receipt_filepath):
+                            try:
+                                os.remove(old_receipt_filepath)
+                            except OSError:
+                                pass  # Continue even if old file deletion fails
+
+                    # Generate unique filename
+                    filename = secure_filename(
+                        f"receipt_{expense.id}_{datetime.now(timezone.utc).timestamp()}.{file_ext}"
+                    )
+                    upload_folder = os.path.join("static", "uploads", "receipts")
+                    os.makedirs(upload_folder, exist_ok=True)
+                    filepath = os.path.join(upload_folder, filename)
+
+                    # Open and resize image
+                    img = Image.open(file.stream)
+
+                    # Convert RGBA/LA/P to RGB if necessary
+                    if img.mode in ("RGBA", "LA", "P"):
+                        background = Image.new("RGB", img.size, (255, 255, 255))
+                        if img.mode == "P":
+                            img = img.convert("RGBA")
+                        background.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+                        img = background
+
+                    # Resize to max 800x800 while maintaining aspect ratio
+                    img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+
+                    # Save as JPEG with optimization
+                    img.save(filepath, "JPEG", quality=85, optimize=True)
+
+                    # Update expense record with receipt info
+                    expense.receipt_image = filename
+                    expense.receipt_uploaded_by = user.email
+                    expense.receipt_uploaded_at = datetime.now(timezone.utc)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"Failed to upload receipt image: {str(e)}")
+                    # Don't fail the expense update if receipt upload fails
+
     # Recalculate points for the group after editing expense
     from services.points_service import PointsService
 
@@ -1072,6 +1193,65 @@ def edit_expense(group_id, expense_id):
     db.session.commit()
 
     flash("Expense updated successfully!", "success")
+    return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+
+@groups_bp.route("/<int:group_id>/expense/<int:expense_id>/delete-receipt", methods=["POST"])
+@login_required
+def delete_receipt(group_id, expense_id):
+    """Delete a receipt from an expense."""
+    import os
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the expense and verify it belongs to the group
+    expense = db.session.get(Expense, expense_id)
+    if not expense:
+        flash("Expense not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Check if expense has a receipt
+    if not expense.receipt_image:
+        flash("No receipt to delete", "error")
+        return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
+
+    # Delete receipt file from filesystem
+    receipt_filename = expense.receipt_image
+    receipt_folder = os.path.join("static", "uploads", "receipts")
+    receipt_filepath = os.path.join(receipt_folder, receipt_filename)
+
+    if os.path.exists(receipt_filepath):
+        try:
+            os.remove(receipt_filepath)
+        except OSError:
+            pass  # Continue even if file deletion fails
+
+    # Clear receipt fields in database
+    expense.receipt_image = None
+    expense.receipt_uploaded_by = None
+    expense.receipt_uploaded_at = None
+    db.session.commit()
+
+    flash("Receipt deleted successfully!", "success")
     return redirect(url_for("groups.expense_detail", group_id=group_id, expense_id=expense_id))
 
 
