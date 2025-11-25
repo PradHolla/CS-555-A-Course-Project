@@ -70,6 +70,9 @@ class Expense(db.Model):
     split_details = db.Column(db.Text)  # JSON string: {"member": amount/percentage/shares}
     category = db.Column(db.String(50), nullable=True)  # Expense category
     expense_date = db.Column(db.Date, default=lambda: date.today())  # Date when expense occurred
+    receipt_image = db.Column(db.String(200), nullable=True)  # Filename for receipt image
+    receipt_uploaded_by = db.Column(db.String(200), nullable=True)  # Email of user who uploaded receipt
+    receipt_uploaded_at = db.Column(db.DateTime, nullable=True)  # Timestamp when receipt was uploaded
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship

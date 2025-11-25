@@ -124,6 +124,16 @@ def init_db(app):
                         "ALTER TABLE user ADD COLUMN daily_reminder_enabled BOOLEAN NOT NULL DEFAULT 1"
                     )
 
+                # Check expense table for receipt_image column
+                cur.execute("PRAGMA table_info('expense')")
+                expense_cols = [row[1] for row in cur.fetchall()]
+                if "receipt_image" not in expense_cols:
+                    cur.execute("ALTER TABLE expense ADD COLUMN receipt_image VARCHAR(200)")
+                if "receipt_uploaded_by" not in expense_cols:
+                    cur.execute("ALTER TABLE expense ADD COLUMN receipt_uploaded_by VARCHAR(200)")
+                if "receipt_uploaded_at" not in expense_cols:
+                    cur.execute("ALTER TABLE expense ADD COLUMN receipt_uploaded_at DATETIME")
+
                 # Check if user_group_points table exists
                 cur.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='user_group_points'"

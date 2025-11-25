@@ -214,6 +214,8 @@ CLAUDE.md
 # Uploaded files (keep directory structure with .gitkeep)
 static/uploads/profile_pics/*
 !static/uploads/profile_pics/.gitkeep
+static/uploads/receipts/*
+!static/uploads/receipts/.gitkeep
 
 # Testing and debug files
 debug_*.py
