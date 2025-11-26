@@ -73,11 +73,13 @@ def create_app(test_config=None):
     from routes.groups import groups_bp
     from routes.invitations import invitations_bp
     from routes.profile import profile_bp
+    from routes.reports import reports_bp
 
     app.register_blueprint(groups_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(invitations_bp)
+    app.register_blueprint(reports_bp)
 
     # Context processor to make current_user available in all templates
     @app.context_processor
