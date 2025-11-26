@@ -1,0 +1,34 @@
+# Weekly Group Activity Summary Email Cron Configuration
+#
+# This cron job sends weekly activity summary emails to all group members
+# Runs every Monday at 9:00 AM
+#
+# Installation:
+#   1. Edit this file with your project path
+#   2. Install: crontab cron/weekly_summary.cron
+#   3. Verify: crontab -l
+#
+# Format: minute hour day month weekday command
+# 0 9 * * 1 = Every Monday at 9:00 AM
+
+# Set environment variables
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+PYTHONPATH=/path/to/your/project
+
+# Weekly summary job (Monday 9 AM)
+0 9 * * 1 cd /path/to/your/project && /path/to/python commands/send_weekly_summaries.py >> /var/log/weekly_summaries.log 2>&1
+
+# Alternative schedules (comment/uncomment as needed):
+
+# Every Sunday at 8 PM
+# 0 20 * * 0 cd /path/to/your/project && /path/to/python commands/send_weekly_summaries.py >> /var/log/weekly_summaries.log 2>&1
+
+# Every Friday at 5 PM
+# 0 17 * * 5 cd /path/to/your/project && /path/to/python commands/send_weekly_summaries.py >> /var/log/weekly_summaries.log 2>&1
+
+# Bi-weekly (every other Monday)
+# 0 9 */14 * 1 cd /path/to/your/project && /path/to/python commands/send_weekly_summaries.py >> /var/log/weekly_summaries.log 2>&1
+
+# Monthly (first Monday of each month)
+# 0 9 1-7 * 1 cd /path/to/your/project && /path/to/python commands/send_weekly_summaries.py >> /var/log/weekly_summaries.log 2>&1

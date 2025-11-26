@@ -351,6 +351,163 @@ def notify_expense_edited(expense, editor_email, group_members):
             _send_or_log_email(member.email, subject, body, html_body)
 
 
+def send_group_activity_summary(user, summary_data):
+    """
+    Send weekly group activity summary email to user.
+
+    Args:
+        user: User object with email and display_name
+        summary_data: Dictionary with formatted activity data from GroupActivityService
+    """
+    try:
+        # Validate inputs
+        if not user or not user.email:
+            raise ValueError("Invalid user object")
+        if not summary_data:
+            raise ValueError("Summary data is required")
+
+        user_name = user.display_name or user.email
+        group_name = summary_data["group_name"]
+        week_start = summary_data["week_start"]
+        week_end = summary_data["week_end"]
+
+        # Create subject line
+        subject = f"Weekly Summary: {group_name} ({week_start} - {week_end})"
+
+        # Create plain text email body
+        plain_body = f"""Hi {user_name},
+
+Here's your weekly activity summary for {group_name}:
+
+Week: {week_start} - {week_end}
+
+"""
+
+        # Add expenses section
+        if summary_data["expense_count"] > 0:
+            plain_body += f"💰 NEW EXPENSES ({summary_data['expense_count']})\n"
+            plain_body += f"Total: ${summary_data['total_expenses']:.2f}\n\n"
+            for exp in summary_data["expenses"]:
+                plain_body += f"  • {exp['description']} - ${exp['amount']:.2f}\n"
+                plain_body += f"    Paid by: {exp['payer']} | {exp['date']}\n"
+            plain_body += "\n"
+
+        # Add settlements section
+        if summary_data["settlement_count"] > 0:
+            plain_body += f"💳 PAYMENTS ({summary_data['settlement_count']})\n"
+            plain_body += f"Total: ${summary_data['total_settlements']:.2f}\n\n"
+            for settlement in summary_data["settlements"]:
+                plain_body += f"  • {settlement['payer']} paid {settlement['recipient']} ${settlement['amount']:.2f}\n"
+                plain_body += f"    {settlement['date']}\n"
+                if settlement['note']:
+                    plain_body += f"    Note: {settlement['note']}\n"
+            plain_body += "\n"
+
+        plain_body += f"""
+This is your automated weekly summary from your expense splitting application.
+"""
+
+        # Create HTML email body
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                  color: white; padding: 30px; border-radius: 8px; text-align: center; }}
+        .content {{ background: #f9f9f9; padding: 25px; margin: 20px 0; border-radius: 8px; }}
+        .section {{ background: white; padding: 20px; margin: 15px 0; border-radius: 8px;
+                   border-left: 4px solid #667eea; }}
+        .section-title {{ color: #667eea; font-size: 18px; font-weight: bold; margin-bottom: 15px; }}
+        .item {{ padding: 12px; margin: 8px 0; background: #f8f9fa; border-radius: 6px; }}
+        .item-title {{ font-weight: bold; color: #333; }}
+        .item-detail {{ color: #666; font-size: 14px; margin-top: 4px; }}
+        .total {{ background: #e8f4f8; padding: 15px; border-radius: 6px; font-weight: bold;
+                 text-align: center; font-size: 18px; color: #667eea; margin: 15px 0; }}
+        .footer {{ color: #666; font-size: 12px; text-align: center; margin-top: 30px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>📊 Weekly Activity Summary</h2>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">{group_name}</p>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.8;">{week_start} - {week_end}</p>
+        </div>
+
+        <div class="content">
+            <p>Hi <strong>{user_name}</strong>,</p>
+            <p>Here's what happened in your group this week:</p>
+"""
+
+        # Add expenses section
+        if summary_data["expense_count"] > 0:
+            html_body += f"""
+            <div class="section">
+                <div class="section-title">💰 New Expenses ({summary_data['expense_count']})</div>
+                <div class="total">Total: ${summary_data['total_expenses']:.2f}</div>
+"""
+            for exp in summary_data["expenses"]:
+                html_body += f"""
+                <div class="item">
+                    <div class="item-title">{exp['description']} - ${exp['amount']:.2f}</div>
+                    <div class="item-detail">Paid by: {exp['payer']} | {exp['date']}</div>
+                    <div class="item-detail">Category: {exp['category']}</div>
+                </div>
+"""
+            html_body += """
+            </div>
+"""
+
+        # Add settlements section
+        if summary_data["settlement_count"] > 0:
+            html_body += f"""
+            <div class="section">
+                <div class="section-title">💳 Payments ({summary_data['settlement_count']})</div>
+                <div class="total">Total: ${summary_data['total_settlements']:.2f}</div>
+"""
+            for settlement in summary_data["settlements"]:
+                html_body += f"""
+                <div class="item">
+                    <div class="item-title">{settlement['payer']} paid {settlement['recipient']} ${settlement['amount']:.2f}</div>
+                    <div class="item-detail">{settlement['date']}</div>
+"""
+                if settlement['note']:
+                    html_body += f"""
+                    <div class="item-detail">Note: {settlement['note']}</div>
+"""
+                html_body += """
+                </div>
+"""
+            html_body += """
+            </div>
+"""
+
+        html_body += """
+        </div>
+
+        <div class="footer">
+            <p>This is an automated weekly summary from your expense splitting application.</p>
+            <p>Stay on top of your group expenses!</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+        # Send email using existing notification infrastructure
+        _send_or_log_email(
+            to_email=user.email, subject=subject, body=plain_body, html_body=html_body
+        )
+
+        logger.info(f"Weekly summary sent to {user.email} for group {group_name}")
+
+    except Exception as e:
+        user_email = user.email if user and hasattr(user, 'email') else 'unknown'
+        logger.error(f"Failed to send weekly summary to {user_email}: {str(e)}")
+        raise
+
+
 def send_payment_reminder(user, balance_amount, days_outstanding, balance_breakdown):
     """
     Send payment reminder email to user with outstanding balance.
