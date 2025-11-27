@@ -1,0 +1,67 @@
+﻿{% extends "base.html" %}
+{% block title %}Monthly Expense Report{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Monthly Expense Report</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if category == 'error' %}bg-red-50 text-red-800{% else %}bg-green-50 text-green-800{% endif %}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <div class="bg-white rounded-xl shadow-sm border p-8">
+        <form method="POST">
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4">Select Period</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Month</label>
+                        <select name="month" required class="w-full px-4 py-2 border rounded-lg">
+                            {% for m in range(1, 13) %}
+                                <option value="{{ m }}" {% if m == default_month %}selected{% endif %}>{{ ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m-1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Year</label>
+                        <select name="year" required class="w-full px-4 py-2 border rounded-lg">
+                            {% for y in range(current_year, 2019, -1) %}
+                                <option value="{{ y }}" {% if y == default_year %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-4">Filters (Optional)</h2>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Groups</label>
+                    <div class="space-y-2 max-h-48 overflow-y-auto p-3 bg-gray-50 rounded-lg">
+                        {% if user_groups %}
+                            {% for group in user_groups %}
+                                <label class="flex items-center"><input type="checkbox" name="group_ids" value="{{ group.id }}" class="mr-2">{{ group.name }}</label>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-sm text-gray-500">No groups available</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Category</label>
+                    <select name="category" class="w-full px-4 py-2 border rounded-lg">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <button type="submit" formaction="{{ url_for('reports.download_pdf') }}" class="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700">Download as PDF</button>
+                <button type="submit" formaction="{{ url_for('reports.download_csv') }}" class="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Download as CSV</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
