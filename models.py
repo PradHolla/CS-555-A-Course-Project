@@ -161,6 +161,25 @@ class GroupNotification(db.Model):
         return f"<GroupNotification {self.notification_type} for group {self.group_id}>"
 
 
+class Announcement(db.Model):
+    """Model for group announcements."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey("group.id"), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content = db.Column(db.String(100), nullable=False)
+    is_pinned = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationships
+    group = db.relationship("Group", backref=db.backref("announcements", cascade="all, delete-orphan"))
+    author = db.relationship("User", foreign_keys=[author_id], backref="announcements")
+
+    def __repr__(self):
+        return f"<Announcement {self.id} for group {self.group_id}>"
+
+
 class Comment(db.Model):
     """Model for comments on expenses."""
 

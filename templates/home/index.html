@@ -4,141 +4,198 @@
 
 {% block extra_head %}
 <style>
-    @keyframes gradient {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-    .animated-gradient {
-        background: linear-gradient(-45deg, #10b981, #06b6d4, #14b8a6, #0891b2);
-        background-size: 400% 400%;
-        animation: gradient 15s ease infinite;
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
     }
-    @keyframes bounce {
-        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-        40% { transform: translateY(-20px); }
-        60% { transform: translateY(-10px); }
+    .animate-fade-in { animation: fadeIn 0.6s ease-out; }
+    .animate-float { animation: float 3s ease-in-out infinite; }
+    
+    .gradient-bg {
+        background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="text-center mb-12">
-    <div class="inline-block mb-6">
-        <div class="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full shadow-2xl animate-pulse">
-            <span class="text-5xl text-white">�</span>
+<!-- Hero Section -->
+<div class="relative text-center mb-24 py-20 overflow-hidden border border-emerald-200/50 rounded-3xl bg-white/50 backdrop-blur-sm">
+    <div class="absolute inset-0 gradient-bg opacity-30 rounded-3xl -z-10"></div>
+    <div class="absolute top-10 right-10 w-32 h-32 bg-emerald-200 rounded-full opacity-20 blur-2xl -z-10"></div>
+    <div class="absolute bottom-10 left-10 w-40 h-40 bg-teal-200 rounded-full opacity-20 blur-2xl -z-10"></div>
+    
+    <div class="animate-fade-in">
+        <div class="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl mb-8 shadow-xl animate-float">
+            <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
         </div>
-    </div>
-    <h1 class="text-5xl font-bold mb-4 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-        Expense Splitter
-    </h1>
-    <p class="text-xl text-gray-600 mb-8">Smart financial tracking for teams and groups</p>
-
-    <div class="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-teal-50 px-6 py-4 rounded-2xl border border-emerald-200">
-        <span class="inline-flex items-center justify-center w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 text-white rounded-lg font-bold">
-            💡
-        </span>
-        <div class="text-left">
-            <p class="text-sm font-semibold text-gray-900">Get Started</p>
-            <p class="text-sm text-gray-600">Track expenses, split bills fairly, and manage group finances with ease</p>
-        </div>
+        <h1 class="text-6xl font-bold mb-3 text-gray-900">
+            Expense Splitter
+        </h1>
+        <p class="text-lg text-emerald-600 font-semibold mb-4">by Team SprintPay</p>
+        <p class="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
+            Smart financial tracking for teams and groups. Split expenses fairly and manage group finances with ease.
+        </p>
+        <a href="{{ url_for('auth.login') if not session.get('user_email') else url_for('groups.list_groups') }}" 
+           class="inline-flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105">
+            Get Started
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+        </a>
     </div>
 </div>
 
-<div class="mb-12">
-    <h2 class="text-3xl font-bold text-center mb-8 text-gray-900">Key Features</h2>
-    <div class="grid md:grid-cols-3 gap-6">
-        <div class="relative group">
-            <div class="absolute -inset-1 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
-            <div class="relative bg-white p-6 rounded-xl border border-gray-200">
-                <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-lg font-bold text-xl mb-4">
-                    💰
+<!-- Key Features Section -->
+<div class="mb-24">
+    <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold mb-4 text-gray-900">Key Features</h2>
+        <p class="text-gray-600 max-w-2xl mx-auto">Everything you need to manage group expenses efficiently</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-8">
+        <div class="group relative bg-white p-8 rounded-xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition-all duration-300">
+            <div class="absolute -top-4 left-8">
+                <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
                 </div>
-                <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
-                    Smart Splitting
-                </h3>
-                <p class="text-gray-600 text-sm">Automatically calculate fair splits among multiple participants with precision.</p>
+            </div>
+            <div class="pt-8">
+                <h3 class="text-xl font-semibold mb-3 text-gray-900">Smart Splitting</h3>
+                <p class="text-gray-600 leading-relaxed">Automatically calculate fair splits among multiple participants with precision and transparency.</p>
             </div>
         </div>
 
-        <div class="relative group">
-            <div class="absolute -inset-1 bg-gradient-to-r from-teal-600 to-cyan-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
-            <div class="relative bg-white p-6 rounded-xl border border-gray-200">
-                <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-lg font-bold text-xl mb-4">
-                    📊
+        <div class="group relative bg-white p-8 rounded-xl border border-gray-200 hover:border-teal-300 hover:shadow-lg transition-all duration-300">
+            <div class="absolute -top-4 left-8">
+                <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
                 </div>
-                <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
-                    Transaction Log
-                </h3>
-                <p class="text-gray-600 text-sm">Keep track of all expenses with detailed transaction history and timestamps.</p>
+            </div>
+            <div class="pt-8">
+                <h3 class="text-xl font-semibold mb-3 text-gray-900">Transaction Log</h3>
+                <p class="text-gray-600 leading-relaxed">Keep track of all expenses with detailed transaction history, timestamps, and receipts.</p>
             </div>
         </div>
 
-        <div class="relative group">
-            <div class="absolute -inset-1 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-200"></div>
-            <div class="relative bg-white p-6 rounded-xl border border-gray-200">
-                <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-lg font-bold text-xl mb-4">
-                    ⚡
+        <div class="group relative bg-white p-8 rounded-xl border border-gray-200 hover:border-cyan-300 hover:shadow-lg transition-all duration-300">
+            <div class="absolute -top-4 left-8">
+                <div class="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
                 </div>
-                <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
-                    Modern UI
-                </h3>
-                <p class="text-gray-600 text-sm">Sleek terminal-inspired interface with a professional tech-forward design.</p>
+            </div>
+            <div class="pt-8">
+                <h3 class="text-xl font-semibold mb-3 text-gray-900">Modern UI</h3>
+                <p class="text-gray-600 leading-relaxed">Sleek terminal-inspired interface with a professional, tech-forward design that's intuitive to use.</p>
             </div>
         </div>
     </div>
 </div>
 
-<div class="mb-12">
-    <div class="group relative overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-200 hover:border-emerald-400 transition-all duration-300 hover:shadow-xl max-w-4xl mx-auto">
-        <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-400 to-teal-500 opacity-10 rounded-full -mr-16 -mt-16"></div>
-        <div class="p-8">
-            <div class="text-5xl mb-4 text-center" style="animation: bounce 2s infinite;">💳</div>
-            <h3 class="text-2xl font-bold mb-3 text-gray-900 text-center">Start Splitting Expenses</h3>
-            <p class="text-gray-600 mb-6 text-center">A sleek tech-forward finance tracker. Split expenses with a modern terminal-inspired interface.</p>
-            <div class="flex flex-wrap gap-2 mb-6 justify-center">
-                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Smart Splitting</span>
-                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Dark Theme</span>
-                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Transaction Log</span>
-                <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">Real-time Calculations</span>
+<!-- Benefits Section -->
+<div class="mb-24">
+    <div class="grid md:grid-cols-2 gap-12 items-center">
+        <div>
+            <div class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold mb-6">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Why Choose Us
             </div>
-            <div class="text-center">
-                <a href="/expense-splitter" class="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 group-hover:scale-105 shadow-lg">
-                    Get Started
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                </a>
+            <h2 class="text-4xl font-bold mb-2 text-gray-900">Built for Modern Teams</h2>
+            <p class="text-sm text-gray-500 mb-6">Created by SprintPay</p>
+            <div class="space-y-6">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-1 text-gray-900">Team Collaboration</h3>
+                        <p class="text-gray-600">Invite team members, create groups, and split expenses seamlessly with real-time updates.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 bg-teal-50 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-1 text-gray-900">Secure & Reliable</h3>
+                        <p class="text-gray-600">Your financial data is protected with industry-standard security measures and encryption.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 bg-cyan-50 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-1 text-gray-900">Detailed Reports</h3>
+                        <p class="text-gray-600">Generate comprehensive expense reports and analytics to track spending patterns and trends.</p>
+                    </div>
+                </div>
             </div>
+        </div>
+        <div class="relative">
+            <div class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-12 border border-emerald-100">
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl p-6 shadow-md text-center">
+                        <div class="text-3xl font-bold text-emerald-600 mb-2">100%</div>
+                        <div class="text-sm text-gray-600">Fair Splits</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-md text-center">
+                        <div class="text-3xl font-bold text-teal-600 mb-2">24/7</div>
+                        <div class="text-sm text-gray-600">Access</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-md text-center">
+                        <div class="text-3xl font-bold text-cyan-600 mb-2">∞</div>
+                        <div class="text-sm text-gray-600">Groups</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-md text-center">
+                        <div class="text-3xl font-bold text-emerald-600 mb-2">$0</div>
+                        <div class="text-sm text-gray-600">Fees</div>
+                    </div>
+                </div>
+            </div>
+            <div class="absolute -top-6 -right-6 w-24 h-24 bg-emerald-200 rounded-full opacity-30 blur-xl"></div>
+            <div class="absolute -bottom-6 -left-6 w-32 h-32 bg-teal-200 rounded-full opacity-30 blur-xl"></div>
         </div>
     </div>
 </div>
 
-<div class="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-8 mb-8">
-    <h2 class="text-3xl font-bold text-center mb-8 text-gray-900">🏗️ Built for Teams</h2>
-    <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
-                📁 Simple & Clean
-            </h3>
-            <p class="text-gray-600 text-sm">Intuitive interface that makes expense tracking effortless for everyone.</p>
+<!-- CTA Section -->
+<div class="relative text-center py-8 mb-8 overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl"></div>
+    <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.1"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-20"></div>
+    <div class="relative max-w-2xl mx-auto px-6">
+        <div class="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg mb-4">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
         </div>
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
-                🎨 Modern Design
-            </h3>
-            <p class="text-gray-600 text-sm">Terminal-inspired aesthetic with a professional, tech-forward look.</p>
-        </div>
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
-                🔧 Easy to Extend
-            </h3>
-            <p class="text-gray-600 text-sm">Built with clean architecture - customize and extend as you need.</p>
-        </div>
-    </div>
-</div>
-
-<div class="text-center py-8">
-    <div class="inline-block animated-gradient text-white px-8 py-4 rounded-full font-bold text-lg shadow-2xl">
-        Ready to Split Expenses! 💰
+        <h3 class="text-2xl font-bold mb-2 text-white">Ready to get started?</h3>
+        <p class="text-base text-white/90 mb-6">Join thousands of teams managing their expenses efficiently and fairly.</p>
+        <a href="{{ url_for('auth.login') if not session.get('user_email') else url_for('groups.list_groups') }}" 
+           class="inline-flex items-center gap-2 px-6 py-3 bg-white text-emerald-600 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200 shadow-xl hover:scale-105">
+            Start Splitting Expenses
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+        </a>
     </div>
 </div>
 {% endblock %}

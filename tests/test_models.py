@@ -418,3 +418,152 @@ def test_group_expenses_backref(app):
     assert len(stored_group.expenses) == 2
     assert expense1 in stored_group.expenses
     assert expense2 in stored_group.expenses
+
+
+# === Announcement Model Tests ===
+
+
+def test_announcement_create_and_persist(app):
+    """Test that Announcement model can be created and persisted."""
+    from models import Announcement
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    announcement = Announcement(
+        group_id=group.id,
+        author_id=user.id,
+        content="Test announcement",
+        is_pinned=False,
+    )
+    db.session.add(announcement)
+    db.session.commit()
+
+    stored = Announcement.query.first()
+    assert stored is not None
+    assert stored.content == "Test announcement"
+    assert stored.group_id == group.id
+    assert stored.author_id == user.id
+    assert stored.is_pinned is False
+    assert stored.created_at is not None
+
+
+def test_announcement_pinned_default_false(app):
+    """Test that Announcement is_pinned defaults to False."""
+    from models import Announcement
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    announcement = Announcement(
+        group_id=group.id,
+        author_id=user.id,
+        content="Test announcement",
+    )
+    db.session.add(announcement)
+    db.session.commit()
+
+    stored = Announcement.query.first()
+    assert stored.is_pinned is False
+
+
+def test_announcement_relationships(app):
+    """Test that Announcement relationships to Group and User work."""
+    from models import Announcement
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    announcement = Announcement(
+        group_id=group.id,
+        author_id=user.id,
+        content="Test announcement",
+    )
+    db.session.add(announcement)
+    db.session.commit()
+
+    stored = Announcement.query.first()
+    assert stored.group is not None
+    assert stored.group.id == group.id
+    assert stored.author is not None
+    assert stored.author.id == user.id
+
+
+def test_announcement_content_max_length(app):
+    """Test that Announcement content is limited to 500 characters."""
+    from models import Announcement
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    # Create announcement with exactly 500 characters
+    content_500 = "a" * 500
+    announcement = Announcement(
+        group_id=group.id,
+        author_id=user.id,
+        content=content_500,
+    )
+    db.session.add(announcement)
+    db.session.commit()
+
+    stored = Announcement.query.first()
+    assert len(stored.content) == 500
+
+
+def test_group_announcements_backref(app):
+    """Test that Group.announcements backref works correctly."""
+    from models import Announcement
+
+    user = User(email="test@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    group = Group(name="Test Group", created_by_id=user.id)
+    group.members.append(user)
+    db.session.add(group)
+    db.session.commit()
+
+    announcement1 = Announcement(
+        group_id=group.id,
+        author_id=user.id,
+        content="Announcement 1",
+    )
+    announcement2 = Announcement(
+        group_id=group.id,
+        author_id=user.id,
+        content="Announcement 2",
+    )
+
+    # Act
+    db.session.add_all([announcement1, announcement2])
+    db.session.commit()
+
+    # Assert
+    stored_group = Group.query.first()
+    assert len(stored_group.announcements) == 2
+    assert announcement1 in stored_group.announcements
+    assert announcement2 in stored_group.announcements

@@ -80,7 +80,7 @@
                                         {% endfor %}
                                     {% endif %}
                                 </div>
-                                <div class="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                                <div class="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
                                     <div class="flex items-center gap-1.5">
                                         <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -93,7 +93,42 @@
                                         </svg>
                                         <span>{{ group.created_at.strftime('%b %d, %Y') }}</span>
                                     </div>
+                                    {% set group_announcements = groups_announcements_data.get(group.id, {}) %}
+                                    {% if group_announcements.pinned_count > 0 or group_announcements.recent_count > 0 %}
+                                    <div class="flex items-center gap-2">
+                                        {% if group_announcements.pinned_count > 0 %}
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                            </svg>
+                                            {{ group_announcements.pinned_count }} pinned
+                                        </span>
+                                        {% endif %}
+                                        {% if group_announcements.recent_count > 0 %}
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+                                            </svg>
+                                            {{ group_announcements.recent_count }} recent
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
                                 </div>
+                                {% set group_announcements = groups_announcements_data.get(group.id, {}) %}
+                                {% if group_announcements.pinned_announcements and group_announcements.pinned_announcements|length > 0 %}
+                                <div class="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <div class="flex items-start gap-2">
+                                        <svg class="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                        </svg>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-xs font-medium text-amber-900 mb-0.5">Latest Pinned</p>
+                                            <p class="text-sm text-amber-800 truncate">{{ group_announcements.pinned_announcements[0].content }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
                                 {% if group.members %}
                                 <div class="flex items-center gap-2">
                                     <div class="flex -space-x-2">

@@ -5,7 +5,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from sqlalchemy import func
 
 from extensions import db
-from models import Comment, Expense, Group, GroupInvitation, User
+from models import Announcement, Comment, Expense, Group, GroupInvitation, User
 from services.expense_service import ExpenseService
 from services.notification_service import (
     notify_expense_deletion,
@@ -67,10 +67,51 @@ def list_groups():
         members_with_points.sort(key=lambda x: x["points"], reverse=True)
         groups_points_data[group.id] = members_with_points
 
+    # Get announcements for all groups
+    from datetime import timedelta
+
+    groups_announcements_data = {}
+    for group in groups:
+        # Get pinned announcements
+        pinned_announcements = (
+            Announcement.query.filter_by(group_id=group.id, is_pinned=True)
+            .order_by(Announcement.created_at.desc())
+            .all()
+        )
+
+        # Get recent announcements (last 7 days)
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        recent_announcements = (
+            Announcement.query.filter_by(group_id=group.id)
+            .filter(Announcement.created_at >= seven_days_ago)
+            .order_by(Announcement.created_at.desc())
+            .all()
+        )
+
+        groups_announcements_data[group.id] = {
+            "pinned_count": len(pinned_announcements),
+            "recent_count": len(recent_announcements),
+            "pinned_announcements": [
+                {
+                    "id": ann.id,
+                    "content": ann.content,
+                    "author_name": (
+                        db.session.get(User, ann.author_id).display_name
+                        or db.session.get(User, ann.author_id).email
+                        if db.session.get(User, ann.author_id)
+                        else "Unknown"
+                    ),
+                    "created_at": ann.created_at,
+                }
+                for ann in pinned_announcements[:1]  # Only get most recent pinned for preview
+            ],
+        }
+
     return render_template(
         "groups/index.html",
         groups=groups,
         groups_points_data=groups_points_data,
+        groups_announcements_data=groups_announcements_data,
         current_user_id=user_id,
     )
 
@@ -705,6 +746,29 @@ def group_expenses(group_id):
     # Get points for current user (for backward compatibility)
     current_user_points = PointsService.get_user_points_in_group(user_id, group_id)
 
+    # Get announcements for this group (pinned first, then by created_at desc)
+    announcements = (
+        Announcement.query.filter_by(group_id=group_id)
+        .order_by(Announcement.is_pinned.desc(), Announcement.created_at.desc())
+        .all()
+    )
+
+    # Prepare announcements data with author info
+    announcements_data = []
+    for announcement in announcements:
+        author = db.session.get(User, announcement.author_id)
+        announcements_data.append(
+            {
+                "id": announcement.id,
+                "content": announcement.content,
+                "author_id": announcement.author_id,
+                "author_name": author.display_name or author.email if author else "Unknown",
+                "created_at": announcement.created_at,
+                "updated_at": announcement.updated_at,
+                "is_pinned": announcement.is_pinned,
+            }
+        )
+
     return render_template(
         "groups/expenses.html",
         group=group,
@@ -719,6 +783,7 @@ def group_expenses(group_id):
         all_group_points=all_group_points,
         current_user_points=current_user_points,
         members_with_points=members_with_points,
+        announcements=announcements_data,
     )
 
 
@@ -1862,3 +1927,329 @@ def invite_members(group_id):
         flash(f"Failed to send invitations: {str(e)}", "error")
 
     return redirect(url_for("groups.group_settings", group_id=group_id))
+
+
+# ========== Announcement Routes ==========
+
+
+@groups_bp.route("/<int:group_id>/announcements", methods=["POST"])
+@login_required
+def create_announcement(group_id):
+    """Create a new announcement for a group."""
+    from flask import jsonify
+
+    # Check if this is an AJAX request
+    is_ajax = (
+        request.is_json
+        or request.headers.get("Content-Type") == "application/json"
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        if is_ajax:
+            return jsonify({"success": False, "error": "User not found"}), 401
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the group and verify user is a member
+    group = db.session.get(Group, group_id)
+    if not group:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Group not found"}), 404
+        flash("Group not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    if user not in group.members:
+        if is_ajax:
+            return jsonify({"success": False, "error": "You are not a member of this group"}), 403
+        flash("You are not a member of this group", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get content from form
+    content = request.form.get("content", "").strip()
+
+    # Validate content
+    if not content:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Content cannot be empty"}), 400
+        flash("Content cannot be empty", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if len(content) > 100:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Content cannot exceed 100 characters"}), 400
+        flash("Content cannot exceed 100 characters", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    try:
+        # Create announcement
+        announcement = Announcement(
+            group_id=group_id,
+            author_id=user_id,
+            content=content,
+            is_pinned=False,
+        )
+        db.session.add(announcement)
+        db.session.commit()
+
+        if is_ajax:
+            return jsonify(
+                {
+                    "success": True,
+                    "announcement": {
+                        "id": announcement.id,
+                        "content": announcement.content,
+                        "author_name": user.display_name or user.email,
+                        "author_id": user.id,
+                        "created_at": announcement.created_at.isoformat(),
+                        "is_pinned": announcement.is_pinned,
+                    },
+                }
+            ), 201
+
+        flash("Announcement created successfully", "success")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    except Exception as e:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({"success": False, "error": str(e)}), 500
+        flash(f"Failed to create announcement: {str(e)}", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/announcements/<int:announcement_id>/edit", methods=["POST"])
+@login_required
+def edit_announcement(group_id, announcement_id):
+    """Edit an existing announcement."""
+    from flask import jsonify
+
+    # Check if this is an AJAX request
+    is_ajax = (
+        request.is_json
+        or request.headers.get("Content-Type") == "application/json"
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        if is_ajax:
+            return jsonify({"success": False, "error": "User not found"}), 401
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the announcement
+    announcement = db.session.get(Announcement, announcement_id)
+    if not announcement:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Announcement not found"}), 404
+        flash("Announcement not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify announcement belongs to the group
+    if announcement.group_id != group_id:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Announcement not found"}), 404
+        flash("Announcement not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify user is the author
+    if announcement.author_id != user_id:
+        if is_ajax:
+            return jsonify({"success": False, "error": "You can only edit your own announcements"}), 403
+        flash("You can only edit your own announcements", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Get content from form
+    content = request.form.get("content", "").strip()
+
+    # Validate content
+    if not content:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Content cannot be empty"}), 400
+        flash("Content cannot be empty", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    if len(content) > 100:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Content cannot exceed 100 characters"}), 400
+        flash("Content cannot exceed 100 characters", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    try:
+        # Update announcement
+        announcement.content = content
+        announcement.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        if is_ajax:
+            return jsonify(
+                {
+                    "success": True,
+                    "announcement": {
+                        "id": announcement.id,
+                        "content": announcement.content,
+                        "author_name": user.display_name or user.email,
+                        "author_id": user.id,
+                        "created_at": announcement.created_at.isoformat(),
+                        "updated_at": announcement.updated_at.isoformat() if announcement.updated_at else None,
+                        "is_pinned": announcement.is_pinned,
+                    },
+                }
+            )
+
+        flash("Announcement updated successfully", "success")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    except Exception as e:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({"success": False, "error": str(e)}), 500
+        flash(f"Failed to update announcement: {str(e)}", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/announcements/<int:announcement_id>/delete", methods=["POST"])
+@login_required
+def delete_announcement(group_id, announcement_id):
+    """Delete an announcement."""
+    from flask import jsonify
+
+    # Check if this is an AJAX request
+    is_ajax = (
+        request.is_json
+        or request.headers.get("Content-Type") == "application/json"
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        if is_ajax:
+            return jsonify({"success": False, "error": "User not found"}), 401
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the announcement
+    announcement = db.session.get(Announcement, announcement_id)
+    if not announcement:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Announcement not found"}), 404
+        flash("Announcement not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify announcement belongs to the group
+    if announcement.group_id != group_id:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Announcement not found"}), 404
+        flash("Announcement not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify user is the author
+    if announcement.author_id != user_id:
+        if is_ajax:
+            return jsonify({"success": False, "error": "You can only delete your own announcements"}), 403
+        flash("You can only delete your own announcements", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    try:
+        db.session.delete(announcement)
+        db.session.commit()
+
+        if is_ajax:
+            return jsonify({"success": True})
+
+        flash("Announcement deleted successfully", "success")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    except Exception as e:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({"success": False, "error": str(e)}), 500
+        flash(f"Failed to delete announcement: {str(e)}", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+
+@groups_bp.route("/<int:group_id>/announcements/<int:announcement_id>/pin", methods=["POST"])
+@login_required
+def pin_announcement(group_id, announcement_id):
+    """Toggle pin status of an announcement."""
+    from flask import jsonify
+
+    # Check if this is an AJAX request
+    is_ajax = (
+        request.is_json
+        or request.headers.get("Content-Type") == "application/json"
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    )
+
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+
+    if not user:
+        if is_ajax:
+            return jsonify({"success": False, "error": "User not found"}), 401
+        flash("User not found", "error")
+        return redirect(url_for("groups.list_groups"))
+
+    # Get the announcement
+    announcement = db.session.get(Announcement, announcement_id)
+    if not announcement:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Announcement not found"}), 404
+        flash("Announcement not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify announcement belongs to the group
+    if announcement.group_id != group_id:
+        if is_ajax:
+            return jsonify({"success": False, "error": "Announcement not found"}), 404
+        flash("Announcement not found", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    # Verify user is the author
+    if announcement.author_id != user_id:
+        if is_ajax:
+            return jsonify({"success": False, "error": "You can only pin your own announcements"}), 403
+        flash("You can only pin your own announcements", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    try:
+        # Toggle pin status
+        announcement.is_pinned = not announcement.is_pinned
+        db.session.commit()
+
+        if is_ajax:
+            return jsonify(
+                {
+                    "success": True,
+                    "is_pinned": announcement.is_pinned,
+                    "announcement": {
+                        "id": announcement.id,
+                        "content": announcement.content,
+                        "author_name": user.display_name or user.email,
+                        "author_id": user.id,
+                        "created_at": announcement.created_at.isoformat(),
+                        "is_pinned": announcement.is_pinned,
+                    },
+                }
+            )
+
+        flash(
+            f"Announcement {'pinned' if announcement.is_pinned else 'unpinned'} successfully",
+            "success",
+        )
+        return redirect(url_for("groups.group_expenses", group_id=group_id))
+
+    except Exception as e:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({"success": False, "error": str(e)}), 500
+        flash(f"Failed to toggle pin status: {str(e)}", "error")
+        return redirect(url_for("groups.group_expenses", group_id=group_id))

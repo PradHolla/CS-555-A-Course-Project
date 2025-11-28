@@ -185,6 +185,115 @@
 </div>
 {% endif %}
 
+<!-- Announcements Section -->
+<div class="mb-6 bg-white rounded-xl shadow-md border border-gray-200 p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+            </svg>
+            Announcements
+        </h3>
+        <button onclick="showCreateAnnouncementModal()" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            New Announcement
+        </button>
+    </div>
+
+    <div id="announcements-list" class="space-y-3">
+        {% if announcements %}
+            {% for announcement in announcements %}
+            <div class="announcement-item border border-gray-200 rounded-lg p-4 {% if announcement.is_pinned %}bg-amber-50 border-amber-300{% else %}bg-gray-50{% endif %}" data-announcement-id="{{ announcement.id }}">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-2">
+                            {% if announcement.is_pinned %}
+                            <svg class="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                            </svg>
+                            <span class="text-xs font-medium text-amber-700">Pinned</span>
+                            {% endif %}
+                            <span class="text-sm text-gray-600">{{ announcement.author_name }}</span>
+                            <span class="text-sm text-gray-400">•</span>
+                            <span class="text-sm text-gray-500">{{ announcement.created_at.strftime('%b %d, %Y at %I:%M %p') }}</span>
+                            {% if announcement.updated_at %}
+                            <span class="text-xs text-gray-400">(edited)</span>
+                            {% endif %}
+                        </div>
+                        <p class="text-gray-900 announcement-content">{{ announcement.content }}</p>
+                    </div>
+                    {% if announcement.author_id == current_user_id %}
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button onclick="editAnnouncement({{ announcement.id }}, '{{ announcement.content|replace("'", "\\'")|replace('"', '\\"') }}')" class="p-2 text-gray-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Edit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                        <button onclick="togglePinAnnouncement({{ announcement.id }}, {{ 'true' if announcement.is_pinned else 'false' }})" class="p-2 text-gray-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="{% if announcement.is_pinned %}Unpin{% else %}Pin{% endif %}">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                            </svg>
+                        </button>
+                        <button onclick="deleteAnnouncement({{ announcement.id }})" class="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+                </svg>
+                <p class="text-sm">No announcements yet. Create one to share important information with the group!</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Create/Edit Announcement Modal -->
+<div id="announcement-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-semibold text-gray-900" id="modal-title">Create Announcement</h3>
+                <button onclick="closeAnnouncementModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form id="announcement-form" onsubmit="handleAnnouncementSubmit(event)">
+                <input type="hidden" id="announcement-id" name="announcement_id" value="">
+                <div class="mb-4">
+                    <label for="announcement-content" class="block text-sm font-medium text-gray-700 mb-2">Content</label>
+                    <textarea id="announcement-content" name="content" rows="4" maxlength="100" required
+                        class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-gray-900 placeholder-gray-400"
+                        placeholder="Enter your announcement (max 100 characters)..."></textarea>
+                    <div class="mt-1 flex justify-between items-center">
+                        <p class="text-xs text-gray-500">Share important information with all group members</p>
+                        <span class="text-xs text-gray-500" id="char-count">0 / 100</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" onclick="closeAnnouncementModal()" class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors">
+                        <span id="submit-text">Create</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="grid lg:grid-cols-[1fr,2.5fr] gap-6">
     <!-- Add Transaction Form (Compact Sidebar) -->
     <div class="bg-white rounded-xl shadow-md border border-gray-200 p-5">
@@ -1017,6 +1126,151 @@ function markNotificationRead(notificationId) {
     }
 }
 
+// Announcement functionality (global functions for onclick handlers)
+const groupId = {{ group.id }};
+const currentUserId = {{ current_user_id }};
+
+function showCreateAnnouncementModal() {
+    const announcementModal = document.getElementById('announcement-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const submitText = document.getElementById('submit-text');
+    const announcementIdInput = document.getElementById('announcement-id');
+    const announcementContent = document.getElementById('announcement-content');
+    const charCount = document.getElementById('char-count');
+    
+    if (announcementModal) {
+        modalTitle.textContent = 'Create Announcement';
+        submitText.textContent = 'Create';
+        announcementIdInput.value = '';
+        announcementContent.value = '';
+        charCount.textContent = '0 / 100';
+        announcementModal.classList.remove('hidden');
+        announcementContent.focus();
+    }
+}
+
+function closeAnnouncementModal() {
+    const announcementModal = document.getElementById('announcement-modal');
+    const announcementForm = document.getElementById('announcement-form');
+    const announcementIdInput = document.getElementById('announcement-id');
+    
+    if (announcementModal) {
+        announcementModal.classList.add('hidden');
+        announcementForm.reset();
+        announcementIdInput.value = '';
+    }
+}
+
+function editAnnouncement(id, content) {
+    const announcementModal = document.getElementById('announcement-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const submitText = document.getElementById('submit-text');
+    const announcementIdInput = document.getElementById('announcement-id');
+    const announcementContent = document.getElementById('announcement-content');
+    const charCount = document.getElementById('char-count');
+    
+    if (announcementModal) {
+        modalTitle.textContent = 'Edit Announcement';
+        submitText.textContent = 'Update';
+        announcementIdInput.value = id;
+        announcementContent.value = content;
+        const length = content.length;
+        charCount.textContent = `${length} / 100`;
+        announcementModal.classList.remove('hidden');
+        announcementContent.focus();
+    }
+}
+
+function handleAnnouncementSubmit(event) {
+    event.preventDefault();
+    const announcementForm = document.getElementById('announcement-form');
+    const announcementIdInput = document.getElementById('announcement-id');
+    const formData = new FormData(announcementForm);
+    const content = formData.get('content').trim();
+    const announcementId = announcementIdInput.value;
+
+    if (!content) {
+        alert('Content cannot be empty');
+        return;
+    }
+
+    if (content.length > 100) {
+        alert('Content cannot exceed 100 characters');
+        return;
+    }
+
+    const url = announcementId
+        ? `/groups/${groupId}/announcements/${announcementId}/edit`
+        : `/groups/${groupId}/announcements`;
+
+    fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeAnnouncementModal();
+            location.reload(); // Reload to show updated announcements
+        } else {
+            alert(data.error || 'An error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+    });
+}
+
+function deleteAnnouncement(id) {
+    if (!confirm('Are you sure you want to delete this announcement?')) {
+        return;
+    }
+
+    fetch(`/groups/${groupId}/announcements/${id}/delete`, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload(); // Reload to show updated announcements
+        } else {
+            alert(data.error || 'An error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+    });
+}
+
+function togglePinAnnouncement(id, isPinned) {
+    fetch(`/groups/${groupId}/announcements/${id}/pin`, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload(); // Reload to show updated pin status
+        } else {
+            alert(data.error || 'An error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+    });
+}
+
 // Toggle edit mode for an expense
 function toggleEditMode(expenseId) {
     const expenseCard = document.querySelector(`[data-expense-id="${expenseId}"]`);
@@ -1569,6 +1823,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (clearFiltersFromEmptyBtn) {
         clearFiltersFromEmptyBtn.addEventListener('click', clearFilters);
+    }
+
+    // Initialize announcement functionality when DOM is ready
+    const announcementContent = document.getElementById('announcement-content');
+    const charCount = document.getElementById('char-count');
+    const announcementModal = document.getElementById('announcement-modal');
+    const announcementForm = document.getElementById('announcement-form');
+
+    // Character counter
+    if (announcementContent && charCount) {
+        announcementContent.addEventListener('input', function() {
+            const length = this.value.length;
+            charCount.textContent = `${length} / 100`;
+            if (length > 100) {
+                charCount.classList.add('text-red-600');
+            } else {
+                charCount.classList.remove('text-red-600');
+            }
+        });
+    }
+
+    // Close modal on outside click
+    if (announcementModal) {
+        announcementModal.addEventListener('click', function(e) {
+            if (e.target === announcementModal) {
+                closeAnnouncementModal();
+            }
+        });
     }
 });
 </script>
