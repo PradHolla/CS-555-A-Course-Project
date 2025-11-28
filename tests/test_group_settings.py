@@ -709,6 +709,50 @@ class TestMemberManagement:
         assert "user2@test.com" in emails
         assert "user3@test.com" in emails
 
+    
+    def test_invite_members_rejects_when_group_full(self, client, auth_user):
+        """Test inviting members fails when group already has 5 participants."""
+        from models import GroupInvitation
+    
+        with client.session_transaction() as sess:
+            sess["user_id"] = auth_user.id
+            sess["user_email"] = auth_user.email
+    
+        creator = db.session.get(User, auth_user.id)
+    
+        # Create group and add it to session FIRST
+        group = Group(name="Full Group", created_by_id=creator.id)
+        db.session.add(group)
+    
+        # Flush so group gets an ID before adding members
+        db.session.flush()
+    
+        # Add creator as member
+        group.members.append(creator)
+    
+        # Add four additional members to reach 5 total participants
+        for idx in range(4):
+            member = User(email=f"member{idx}@test.com")
+            db.session.add(member)
+            db.session.flush()
+            group.members.append(member)
+    
+        db.session.commit()
+    
+        response = client.post(
+            f"/groups/{group.id}/invite-members",
+            data={"member_emails": "newmember@test.com"},
+            follow_redirects=True,
+        )
+    
+        assert response.status_code == 200
+        assert b"Group limit reached!" in response.data
+    
+        assert (
+            GroupInvitation.query.filter_by(email="newmember@test.com", group_id=group.id).first()
+            is None
+        )
+
     def test_invite_members_already_member(self, client, auth_user):
         """Test inviting user who is already a member."""
         with client.session_transaction() as sess:
@@ -1125,3 +1169,6 @@ class TestEditGroupName:
         assert b"group_name" in response.data
         assert b"Save Name" in response.data
         assert b"Test Group" in response.data  # Current name should be in input
+
+    
+    

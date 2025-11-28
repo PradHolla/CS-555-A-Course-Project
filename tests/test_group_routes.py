@@ -88,6 +88,30 @@ def test_groups_create_group_rejects_invalid_member_emails(client, app):
     assert Group.query.filter_by(name="Invalid Email Group").first() is None
 
 
+def test_groups_create_group_rejects_more_than_four_members(client, app):
+    """Test that POST /groups/create rejects more than 4 additional member emails."""
+    from extensions import db
+
+    creator = User(email="limit@test.com")
+    db.session.add(creator)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["user_id"] = creator.id
+        session["user_email"] = creator.email
+
+    group_data = {
+        "name": "Too Many Members",
+        "members": "a@test.com, b@test.com, c@test.com, d@test.com, e@test.com",
+    }
+
+    response = client.post("/groups/create", data=group_data, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Maximum 4 additional member emails allowed" in response.data
+    assert Group.query.filter_by(name="Too Many Members").first() is None
+
+
 def test_groups_create_group_without_members(client, app):
     """Test that POST /groups/create works without optional members."""
     # Arrange

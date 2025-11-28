@@ -10,7 +10,16 @@
             <div class="mb-6">
                 {% for category, message in messages %}
                     <div class="p-4 rounded-lg {% if category == 'error' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-green-50 border border-green-200 text-green-800{% endif %}">
-                        {{ message }}
+                        {% if category == 'error' and 'Group limit reached' in message %}
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span class="font-bold">{{ message }}</span>
+                            </div>
+                        {% else %}
+                            {{ message }}
+                        {% endif %}
                     </div>
                 {% endfor %}
             </div>
@@ -158,6 +167,18 @@
             <h3 class="text-lg font-semibold text-gray-700 mb-3">Invite New Members</h3>
             <p class="text-gray-600 mb-4">Enter email addresses to invite people to join this group. They will receive an invitation email.</p>
             
+            {% if group.members|length >= 5 %}
+            <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div class="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span class="font-bold text-red-800">Group limit reached!</span>
+                </div>
+                <p class="text-sm text-red-700 mt-2">This group has reached the maximum limit of 5 members. You cannot invite more members.</p>
+            </div>
+            {% endif %}
+            
             <form action="{{ url_for('groups.invite_members', group_id=group.id) }}" method="POST">
                 <div class="flex items-start gap-4">
                     <div class="flex-grow">
@@ -168,12 +189,14 @@
                                id="member_emails" 
                                name="member_emails"
                                placeholder="user@example.com, another@example.com"
-                               class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 {% if group.members|length >= 5 %}bg-gray-100 cursor-not-allowed{% endif %}"
+                               {% if group.members|length >= 5 %}disabled{% endif %}
                                required>
                         <p class="text-xs text-gray-500 mt-1">Separate multiple email addresses with commas</p>
                     </div>
                     <button type="submit"
-                            class="mt-7 px-6 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors">
+                            class="mt-7 px-6 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors {% if group.members|length >= 5 %}opacity-50 cursor-not-allowed{% endif %}"
+                            {% if group.members|length >= 5 %}disabled{% endif %}>
                         Send Invitations
                     </button>
                 </div>
