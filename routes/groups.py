@@ -297,6 +297,15 @@ def create_group():
     # Validate all email formats BEFORE any DB operations
     if member_emails:
         emails = [email.strip() for email in member_emails.split(",") if email.strip()]
+        
+        # Filter out creator's email if included
+        emails = [email for email in emails if email != creator.email]
+        
+        # Check maximum limit: creator + 4 emails = 5 total participants
+        if len(emails) > 4:
+            flash("Maximum 4 additional member emails allowed. The total group size cannot exceed 5 participants (including you as the creator).", "error")
+            return redirect(url_for("groups.create_group"))
+        
         for email in emails:
             if not is_valid_email(email):
                 flash(f"Invalid email format: {email}", "error")
@@ -317,10 +326,10 @@ def create_group():
         # Add other members if emails provided
         if member_emails:
             emails = [email.strip() for email in member_emails.split(",") if email.strip()]
+            # Filter out creator's email if included
+            emails = [email for email in emails if email != creator.email]
 
             for email in emails:
-                if email == creator.email:
-                    continue  # Skip creator (already added)
 
                 # Check if invitation already exists (whether user exists or not)
                 existing_invitation = GroupInvitation.query.filter_by(
@@ -1857,6 +1866,11 @@ def invite_members(group_id):
     if user not in group.members:
         flash("You are not a member of this group", "error")
         return redirect(url_for("groups.list_groups"))
+
+    # Check if group has reached the maximum limit of 5 members
+    if len(group.members) >= 5:
+        flash("Group limit reached!", "error")
+        return redirect(url_for("groups.group_settings", group_id=group_id))
 
     # Get email addresses from form
     member_emails = request.form.get("member_emails", "").strip()
