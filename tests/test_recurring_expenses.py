@@ -548,3 +548,225 @@ class TestRecurringExpenseRoutes:
             assert expense.is_recurring is False
             assert expense.recurrence_frequency is None
             assert expense.next_occurrence is None
+
+    def test_create_recurring_expense_with_invalid_frequency(self, client, app):
+        """Test that invalid frequency defaults to monthly."""
+        with app.app_context():
+            user = User(email="test@example.com")
+            db.session.add(user)
+            db.session.commit()
+
+            group = Group(name="Test Group", created_by_id=user.id)
+            group.members.append(user)
+            db.session.add(group)
+            db.session.commit()
+
+            with client.session_transaction() as sess:
+                sess["user_id"] = user.id
+                sess["email"] = user.email
+
+            response = client.post(
+                f"/groups/{group.id}",
+                data={
+                    "description": "Invalid Frequency Test",
+                    "amount": "100.00",
+                    "payer": user.email,
+                    "split_type": "equal",
+                    "participants": user.email,
+                    "currency": "USD",
+                    "is_recurring": "on",
+                    "recurrence_frequency": "invalid_frequency",
+                },
+                follow_redirects=True,
+            )
+
+            assert response.status_code == 200
+
+            expense = Expense.query.filter_by(description="Invalid Frequency Test").first()
+            assert expense is not None
+            assert expense.is_recurring is True
+            # Invalid frequency should default to monthly
+            assert expense.recurrence_frequency == "monthly"
+
+    def test_create_recurring_expense_end_date_before_next_occurrence(self, client, app):
+        """Test recurring expense where end date is before next occurrence."""
+        with app.app_context():
+            user = User(email="test@example.com")
+            db.session.add(user)
+            db.session.commit()
+
+            group = Group(name="Test Group", created_by_id=user.id)
+            group.members.append(user)
+            db.session.add(group)
+            db.session.commit()
+
+            # Set end date to tomorrow (before next monthly occurrence)
+            end_date = date.today() + timedelta(days=1)
+
+            with client.session_transaction() as sess:
+                sess["user_id"] = user.id
+                sess["email"] = user.email
+
+            response = client.post(
+                f"/groups/{group.id}",
+                data={
+                    "description": "Short-lived Recurring",
+                    "amount": "100.00",
+                    "payer": user.email,
+                    "split_type": "equal",
+                    "participants": user.email,
+                    "currency": "USD",
+                    "is_recurring": "on",
+                    "recurrence_frequency": "monthly",
+                    "recurrence_end_date": end_date.strftime("%Y-%m-%d"),
+                },
+                follow_redirects=True,
+            )
+
+            assert response.status_code == 200
+
+            expense = Expense.query.filter_by(description="Short-lived Recurring").first()
+            assert expense is not None
+            assert expense.is_recurring is True
+            # Next occurrence should be None since it would be after end date
+            assert expense.next_occurrence is None
+
+    def test_create_recurring_expense_with_invalid_end_date(self, client, app):
+        """Test recurring expense with invalid end date format."""
+        with app.app_context():
+            user = User(email="test@example.com")
+            db.session.add(user)
+            db.session.commit()
+
+            group = Group(name="Test Group", created_by_id=user.id)
+            group.members.append(user)
+            db.session.add(group)
+            db.session.commit()
+
+            with client.session_transaction() as sess:
+                sess["user_id"] = user.id
+                sess["email"] = user.email
+
+            response = client.post(
+                f"/groups/{group.id}",
+                data={
+                    "description": "Invalid End Date Test",
+                    "amount": "100.00",
+                    "payer": user.email,
+                    "split_type": "equal",
+                    "participants": user.email,
+                    "currency": "USD",
+                    "is_recurring": "on",
+                    "recurrence_frequency": "monthly",
+                    "recurrence_end_date": "not-a-valid-date",
+                },
+                follow_redirects=True,
+            )
+
+            assert response.status_code == 200
+
+            expense = Expense.query.filter_by(description="Invalid End Date Test").first()
+            assert expense is not None
+            assert expense.is_recurring is True
+            # Invalid date should result in None
+            assert expense.recurrence_end_date is None
+            # But next_occurrence should still be set
+            assert expense.next_occurrence is not None
+
+
+class TestRecurringExpenseServiceEdgeCases:
+    """Additional edge case tests for RecurringExpenseService."""
+
+    def test_cancel_non_recurring_expense(self, app):
+        """Test canceling a non-recurring expense returns False."""
+        from services.recurring_expense_service import RecurringExpenseService
+
+        with app.app_context():
+            expense = Expense(
+                description="Non-recurring",
+                amount=100.00,
+                currency="USD",
+                payer="test@example.com",
+                group_id=1,
+                is_recurring=False,
+            )
+            db.session.add(expense)
+            db.session.commit()
+
+            result = RecurringExpenseService.cancel_recurring_expense(expense.id)
+            assert result is False
+
+    def test_cancel_nonexistent_expense(self, app):
+        """Test canceling a non-existent expense returns False."""
+        from services.recurring_expense_service import RecurringExpenseService
+
+        with app.app_context():
+            result = RecurringExpenseService.cancel_recurring_expense(99999)
+            assert result is False
+
+    def test_process_recurring_expense_with_error(self, app, monkeypatch):
+        """Test processing recurring expense handles errors gracefully."""
+        from services.recurring_expense_service import RecurringExpenseService
+
+        with app.app_context():
+            expense = Expense(
+                description="Error Test",
+                amount=100.00,
+                currency="USD",
+                payer="test@example.com",
+                group_id=1,
+                is_recurring=True,
+                recurrence_frequency="monthly",
+                next_occurrence=date.today(),
+            )
+            db.session.add(expense)
+            db.session.commit()
+
+            # Monkeypatch to simulate an error
+            def mock_commit():
+                raise Exception("Simulated database error")
+
+            monkeypatch.setattr(db.session, "commit", mock_commit)
+
+            new_expense, success = RecurringExpenseService.process_recurring_expense(expense)
+
+            assert success is False
+            assert new_expense is None
+
+    def test_process_all_due_expenses_with_failures(self, app, monkeypatch):
+        """Test processing all due expenses counts failures correctly."""
+        from services.recurring_expense_service import RecurringExpenseService
+
+        with app.app_context():
+            # Create two due expenses
+            for i in range(2):
+                expense = Expense(
+                    description=f"Due Expense {i}",
+                    amount=100.00,
+                    currency="USD",
+                    payer="test@example.com",
+                    group_id=1,
+                    is_recurring=True,
+                    recurrence_frequency="monthly",
+                    next_occurrence=date.today(),
+                )
+                db.session.add(expense)
+            db.session.commit()
+
+            # Mock process_recurring_expense to fail
+            call_count = [0]
+
+            def mock_process(expense):
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return None, False  # First one fails
+                return Expense(description="Generated"), True  # Second succeeds
+
+            monkeypatch.setattr(
+                RecurringExpenseService, "process_recurring_expense", mock_process
+            )
+
+            successful, failed = RecurringExpenseService.process_all_due_expenses()
+
+            assert successful == 1
+            assert failed == 1
