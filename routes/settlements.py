@@ -78,10 +78,6 @@ def history():
     user_id = session.get("user_id")
     user = db.session.get(User, user_id)
     
-    if not user:
-        flash("User not found.", "error")
-        return redirect(url_for("expenses.balance_summary"))
-    
     # Get all settlements involving this user (as payer or recipient)
     settlements = SettlementService.get_user_settlements(user_id)
     
