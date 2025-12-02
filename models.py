@@ -96,11 +96,20 @@ class Expense(db.Model):
     receipt_uploaded_at = db.Column(db.DateTime, nullable=True)  # Timestamp when receipt was uploaded
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Recurring expense fields
+    is_recurring = db.Column(db.Boolean, default=False, nullable=False)  # Whether this is a recurring expense
+    recurrence_frequency = db.Column(db.String(20), nullable=True)  # 'weekly', 'monthly', 'yearly'
+    recurrence_end_date = db.Column(db.Date, nullable=True)  # Optional end date for recurrence
+    next_occurrence = db.Column(db.Date, nullable=True)  # Next scheduled occurrence date
+    parent_expense_id = db.Column(db.Integer, db.ForeignKey("expense.id"), nullable=True)  # Reference to original recurring expense
+
     # Relationship
     group = db.relationship("Group", backref="expenses")
     comments = db.relationship(
         "Comment", backref="expense", lazy="dynamic", cascade="all, delete-orphan"
     )
+    # Self-referential relationship for recurring expenses
+    parent_expense = db.relationship("Expense", remote_side=[id], backref="child_expenses")
 
 
 class Settlement(db.Model):
