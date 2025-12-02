@@ -1,7 +1,7 @@
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 
 from extensions import db
-from models import Settlement
+from models import Settlement, User
 from services.notification_service import notify_settlement_recipient
 from services.settlement_service import SettlementService
 from utils.decorators import login_required
@@ -69,3 +69,20 @@ def detail(settlement_id):
     if not s:
         abort(404)
     return render_template("settlements/details.html", settlement=s)
+
+
+@settlements_bp.route("/history")
+@login_required
+def history():
+    """Display settlement history for the current user."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id)
+    
+    # Get all settlements involving this user (as payer or recipient)
+    settlements = SettlementService.get_user_settlements(user_id)
+    
+    return render_template(
+        "settlements/history.html",
+        settlements=settlements,
+        current_user=user,
+    )

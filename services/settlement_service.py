@@ -1,5 +1,7 @@
 """Business logic for settlement validation and processing."""
 
+from sqlalchemy import or_
+
 from extensions import db
 from models import Expense, Settlement, User
 from services.expense_service import ExpenseService
@@ -171,3 +173,22 @@ class SettlementService:
         db.session.commit()
 
         return (True, settlement, None)
+
+    @staticmethod
+    def get_user_settlements(user_id: int) -> list:
+        """
+        Get all settlements involving a user (as payer or recipient).
+
+        Args:
+            user_id: ID of the user to get settlements for
+
+        Returns:
+            list: List of Settlement objects ordered by created_at descending (newest first)
+        """
+        return (
+            Settlement.query.filter(
+                or_(Settlement.payer_id == user_id, Settlement.recipient_id == user_id)
+            )
+            .order_by(Settlement.created_at.desc())
+            .all()
+        )
