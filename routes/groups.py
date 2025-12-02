@@ -514,6 +514,39 @@ def group_expenses(group_id):
         if currency not in supported_currencies:
             currency = "USD"
 
+        # Handle recurring expense options
+        is_recurring = request.form.get("is_recurring") == "on"
+        recurrence_frequency = None
+        recurrence_end_date = None
+        next_occurrence = None
+
+        if is_recurring:
+            recurrence_frequency = request.form.get("recurrence_frequency", "monthly")
+            if recurrence_frequency not in ["weekly", "monthly", "yearly"]:
+                recurrence_frequency = "monthly"
+
+            # Parse optional end date
+            end_date_str = request.form.get("recurrence_end_date", "").strip()
+            if end_date_str:
+                try:
+                    recurrence_end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    recurrence_end_date = None
+
+            # Calculate next occurrence based on frequency
+            from dateutil.relativedelta import relativedelta
+            today = date.today()
+            if recurrence_frequency == "weekly":
+                next_occurrence = today + relativedelta(weeks=1)
+            elif recurrence_frequency == "monthly":
+                next_occurrence = today + relativedelta(months=1)
+            elif recurrence_frequency == "yearly":
+                next_occurrence = today + relativedelta(years=1)
+
+            # If next occurrence is after end date, don't set it
+            if recurrence_end_date and next_occurrence > recurrence_end_date:
+                next_occurrence = None
+
         # Create expense
         expense = Expense(
             description=description,
@@ -526,6 +559,10 @@ def group_expenses(group_id):
             participants=", ".join(split_details.keys()),  # Keep for backward compatibility
             category=category,
             expense_date=date.today(),  # Automatically set to today's date
+            is_recurring=is_recurring,
+            recurrence_frequency=recurrence_frequency,
+            recurrence_end_date=recurrence_end_date,
+            next_occurrence=next_occurrence,
         )
         db.session.add(expense)
         db.session.commit()
