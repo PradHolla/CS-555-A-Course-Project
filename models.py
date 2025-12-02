@@ -55,10 +55,31 @@ class User(db.Model):
         return f"<User {self.email}>"
 
 
+# Supported currencies with their symbols
+SUPPORTED_CURRENCIES = {
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "CAD": "C$",
+    "AUD": "A$",
+    "INR": "₹",
+    "CNY": "¥",
+    "CHF": "Fr",
+    "MXN": "MX$",
+}
+
+
+def get_currency_symbol(currency_code: str) -> str:
+    """Get the symbol for a currency code."""
+    return SUPPORTED_CURRENCIES.get(currency_code, "$")
+
+
 class Expense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
     amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default="USD")  # ISO 4217 currency code
     payer = db.Column(db.String(100), nullable=False)
     participants = db.Column(db.Text)  # Keep for backward compatibility during migration
     group_id = db.Column(
