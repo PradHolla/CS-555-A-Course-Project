@@ -508,10 +508,17 @@ def group_expenses(group_id):
                 flash(error_msg, "error")
                 return redirect(url_for("groups.group_expenses", group_id=group_id))
 
+        # Get currency (default to USD if not provided or invalid)
+        currency = request.form.get("currency", "USD").upper()
+        supported_currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "INR", "CNY", "CHF", "MXN"]
+        if currency not in supported_currencies:
+            currency = "USD"
+
         # Create expense
         expense = Expense(
             description=description,
             amount=amount,
+            currency=currency,
             payer=payer,
             group_id=group_id,
             split_type=split_type,
