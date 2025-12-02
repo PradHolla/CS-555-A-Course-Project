@@ -117,3 +117,185 @@ def test_download_pdf_with_filters(app, client):
             sess["user_email"] = user.email
         response = client.post("/reports/monthly-expense/pdf", data={"year": "2024", "month": "1", "group_ids": [str(group.id)], "category": "Food"})
         assert response.status_code == 200
+
+
+# Group Report Routes Tests
+
+def test_group_monthly_report_form_requires_login(client):
+    """Test that group report form requires authentication."""
+    response = client.get('/reports/group/1/monthly')
+    assert response.status_code == 302
+    assert '/auth/login' in response.location
+
+
+def test_group_monthly_report_form_requires_admin(client, app):
+    """Test that only group admins can access the form."""
+    with app.app_context():
+        from extensions import db
+        from models import User, Group
+        
+        # Create users
+        creator = User(email='creator@test.com')
+        member = User(email='member@test.com')
+        db.session.add_all([creator, member])
+        db.session.flush()
+        
+        # Create group
+        group = Group(name='Test Group', created_by_id=creator.id)
+        group.members.append(creator)
+        group.members.append(member)
+        db.session.add(group)
+        db.session.commit()
+        
+        group_id = group.id
+        member_id = member.id
+    
+    # Login as non-admin member
+    with client.session_transaction() as sess:
+        sess['user_id'] = member_id
+    
+    response = client.get(f'/reports/group/{group_id}/monthly')
+    assert response.status_code == 302
+
+
+def test_group_monthly_report_form_displays(client, app):
+    """Test that group report form displays for admin."""
+    with app.app_context():
+        from extensions import db
+        from models import User, Group
+        
+        creator = User(email='creator@test.com')
+        db.session.add(creator)
+        db.session.flush()
+        
+        group = Group(name='Test Group', created_by_id=creator.id)
+        group.members.append(creator)
+        db.session.add(group)
+        db.session.commit()
+        
+        group_id = group.id
+        creator_id = creator.id
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = creator_id
+    
+    response = client.get(f'/reports/group/{group_id}/monthly')
+    assert response.status_code == 200
+    assert b'Group Monthly Summary Report' in response.data
+
+
+def test_download_group_pdf_success(client, app):
+    """Test successful group PDF download."""
+    with app.app_context():
+        from extensions import db
+        from models import User, Group, Expense
+        from datetime import datetime
+        
+        creator = User(email='creator@test.com')
+        db.session.add(creator)
+        db.session.flush()
+        
+        group = Group(name='Test Group', created_by_id=creator.id)
+        group.members.append(creator)
+        db.session.add(group)
+        db.session.flush()
+        
+        # Add expense
+        expense = Expense(
+            description='Test Expense',
+            amount=100.00,
+            group_id=group.id,
+            payer=creator.email,
+            expense_date=datetime.now().date(),
+            category='Food'
+        )
+        db.session.add(expense)
+        db.session.commit()
+        
+        group_id = group.id
+        creator_id = creator.id
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = creator_id
+    
+    response = client.post(f'/reports/group/{group_id}/monthly/pdf', data={
+        'year': datetime.now().year,
+        'month': datetime.now().month
+    })
+    
+    assert response.status_code == 200
+    assert response.content_type == 'application/pdf'
+
+
+def test_download_group_csv_success(client, app):
+    """Test successful group CSV download."""
+    with app.app_context():
+        from extensions import db
+        from models import User, Group, Expense
+        from datetime import datetime
+        
+        creator = User(email='creator@test.com')
+        db.session.add(creator)
+        db.session.flush()
+        
+        group = Group(name='Test Group', created_by_id=creator.id)
+        group.members.append(creator)
+        db.session.add(group)
+        db.session.flush()
+        
+        expense = Expense(
+            description='Test Expense',
+            amount=100.00,
+            group_id=group.id,
+            payer=creator.email,
+            expense_date=datetime.now().date(),
+            category='Food'
+        )
+        db.session.add(expense)
+        db.session.commit()
+        
+        group_id = group.id
+        creator_id = creator.id
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = creator_id
+    
+    response = client.post(f'/reports/group/{group_id}/monthly/csv', data={
+        'year': datetime.now().year,
+        'month': datetime.now().month
+    })
+    
+    assert response.status_code == 200
+    assert 'text/csv' in response.content_type
+
+
+def test_download_group_pdf_unauthorized(client, app):
+    """Test that non-admin cannot download group PDF."""
+    with app.app_context():
+        from extensions import db
+        from models import User, Group
+        from datetime import datetime
+        
+        creator = User(email='creator@test.com')
+        member = User(email='member@test.com')
+        db.session.add_all([creator, member])
+        db.session.flush()
+        
+        group = Group(name='Test Group', created_by_id=creator.id)
+        group.members.append(creator)
+        group.members.append(member)
+        db.session.add(group)
+        db.session.commit()
+        
+        group_id = group.id
+        member_id = member.id
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = member_id
+    
+    response = client.post(f'/reports/group/{group_id}/monthly/pdf', data={
+        'year': datetime.now().year,
+        'month': datetime.now().month
+    })
+    
+    assert response.status_code == 302
