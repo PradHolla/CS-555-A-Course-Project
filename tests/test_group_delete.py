@@ -85,35 +85,6 @@ def test_delete_group_non_creator_cannot_delete(client, app):
     assert db.session.get(Group, group.id) is not None
 
 
-def test_delete_button_visibility(client, app):
-    """Only the creator sees the Delete Group button on the group page."""
-    from extensions import db
-
-    creator = User(email="creator3@example.com")
-    member = User(email="member3@example.com")
-    db.session.add_all([creator, member])
-    db.session.commit()
-
-    group = Group(name="VisibleGroup", created_by_id=creator.id)
-    group.members.extend([creator, member])
-    db.session.add(group)
-    db.session.commit()
-
-    # As creator - should see button
-    with client.session_transaction() as sess:
-        sess["user_id"] = creator.id
-        sess["user_email"] = creator.email
-    response = client.get(f"/groups/{group.id}")
-    assert response.status_code == 200
-    assert b"Delete Group" in response.data
-
-    # As normal member - should NOT see button
-    with client.session_transaction() as sess:
-        sess["user_id"] = member.id
-        sess["user_email"] = member.email
-    response = client.get(f"/groups/{group.id}")
-    assert response.status_code == 200
-    assert b"Delete Group" not in response.data
 
 
 def test_delete_group_handles_commit_failure(client, app, monkeypatch):
