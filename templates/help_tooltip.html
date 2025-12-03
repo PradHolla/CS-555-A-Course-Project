@@ -1,0 +1,204 @@
+<div id="help-icon" title="Click or hover for page help">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="white" viewBox="0 0 16 16">
+        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+        <path d="M8 4a.905.905 0 0 0-.9.995l.35 3.507a.552.552 0 0 0 1.1 0l.35-3.507A.905.905 0 0 0 8 4zm.002 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>
+    </svg>
+</div>
+
+<!-- The actual tooltip popover -->
+<div id="help-popover" class="popover" role="tooltip" style="display:none;">
+    <div class="popover-arrow"></div>
+    <h3 class="popover-header"></h3>
+    <div class="popover-body"></div>
+</div>
+
+<style>
+#help-icon {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #007bff;
+    padding: 10px;
+    border-radius: 50%;
+    cursor: help;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: all 0.2s;
+}
+#help-icon:hover { transform: scale(1.1); }
+
+#help-popover {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 320px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 10000;
+    padding: 12px;
+    font-size: 14px;
+}
+.popover-arrow {
+    position: absolute;
+    bottom: -10px;
+    right: 12px;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid white;
+}
+</style>
+
+<script>
+const PAGE_HELP = {
+    "index.html": `
+        <ul>
+            <li><strong>This is the home page. Click on Login to proceed</strong></li>
+            <li>If already logged in, you can click on Dashboard, Groups, or the icons in the header bar.</li>
+        </ul>
+    `,
+    "auth/login": `
+        <ul>
+            <li>Provide a valid emailid and click on <i>Send Login Code</i><br>After clicking, you will receive the OTP in your email.</li>
+        </ul>
+    `,
+    "auth/request-otp": `
+        <ul>
+            <li>Enter the OTP for verification code and click <i>Verify and Login</i><br>If you did not receive the code, click on <i>Resend</i></li>
+        </ul>
+    `,
+    "dashboard": `
+        <ul>
+            <li>This shows the financial summary in terms of the total expenses added, the payments made and the outstanding balance.</li>
+            <li>You can click on the <i>Detailed Balances</i> button for details.
+        </ul>
+    `,
+    "groups/index.html": `
+        <ul>
+            <li>This shows all the groups in which you are part of.</li>
+            <li>Click on a group to see the details of the group, to leave the group or delete the group.</li>
+            <li>You can also create a new group by clicking on <i>New Group</i> or <i>Create Group</i></li>
+        </ul>
+    `,
+    "groups/*": `
+        <ul>
+            <li>This is the summary of the selected group</li>
+            <li>It provides options to get a report of the group, leave the group or delete the group if you are the creator of the group</li>
+            <li><br></li>
+            <li><strong>Click on</strong></li>
+            <li><i>Group Report</i> to get the report of the group</li>
+            <li><i>Settings</i> to change the settings of the group</li>
+            <li><i>Leave Group</i> to leave the group</li>
+            <li><i>Delete Group</i> to delete the group</li>
+            <li><i>New Announcement</i> to share a message with the group</li>
+            <li><br></i>
+            <li>Transactions for the group can be added and queried</li>
+            <li><strong>Add Transaction</strong></li>
+            <li>Provide the description, amount, currency and paid-by. Select a category of the expense and optionally upload a receipt. The split type also can be chosen.</li>
+        </ul>
+    `,
+    "balance-summary": `
+        <ul>
+            <li>This shows the balances pending to be paid</li>
+            <li>If there are no expenses at all, you can add them by clicking on the <i>Add First</i> or <i>Add More</i> buttons</li>
+            <li>Click on <i>Settlement History</i> button to see the details on past settlements</li>
+        </ul>
+    `,
+    "settlements/history": `
+        <ul>
+            <li>This shows the history of all the settlements done previously</li>
+        </ul>
+    `,
+    "groups/trend": `
+        <ul>
+            <li>Shows the trend analysis of the expenses</li>
+            <li>The Monthly Totals are the total expenses for the groups where you are part of.</li>
+            <li><br></li>
+            <li>The category breakdown shows the distribution of expenses among various categories.</li>
+        </ul>
+    `,
+    "reports/monthly-expense": `
+        <ul>
+            <li>In this page, you can download the monthly expense details as a report in pdf or csv format</li>
+            <li>You can select the period and optionally the group and category for which you want to see the expenses.</li>
+        </ul>
+    `,
+    "reports/group/*": `
+        <ul>
+            <li>In this page, you can download the monthly expense details for the current group as a report in pdf or csv format</li>
+            <li>You can select the period for which you want to see the expenses.</li>
+        </ul>
+    `,
+    "invitations/index.html": `
+        <ul>
+            <li>Shows the invitations you received and you can accept or decline selectively the invitations</li>
+        </ul>
+    `,
+    "groups/create": `
+        <ul>
+            <li>You can create a group with all the members so that future expenses done by the group can be easily split.</li>
+            <li>Enter a group name and the members up to the maximum number indicated. You are automatically added to the group as a creator and a member.</li>
+            <li><br></li>
+            <li><i>Note: </i>You can add only members who are already registered with the application.
+        </ul>
+    `,
+    "settings": `
+        <ul>
+            <li>To set a picture for the group, click <i>Choose file</i> to select a picture file from the local machine and click on <i>Upload</i> button</li>
+            <li><br></li>
+            <li>To change the group name, type in the new name and click <i>Save Name </i> button</li>
+            <li><br></li>
+            <li>To add new members to the group, enter the email addresses and click <i>Send Invitations </i> button</li>
+        </ul>
+    `,
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const icon = document.getElementById('help-icon');
+    const popover = document.getElementById('help-popover');
+    const body = popover.querySelector('.popover-body');
+
+    // Detect current page
+    let current = window.location.pathname;
+    if (current.endsWith('/')) current += 'index.html';
+    // Flask usually removes .html, so we try a few variants
+    let helpText = null;
+    if (current.endsWith("settings")) {
+            helpText = PAGE_HELP['settings'];
+    }
+    if (!helpText) {
+        helpText = PAGE_HELP[current.slice(1)] 
+                   || PAGE_HELP[current.slice(1) + 'index.html']
+                   || PAGE_HELP[current.slice(1).replace(/\/$/, '') + '/index.html']
+                   || null;
+    }
+
+    // If no direct match, try wildcard patterns
+    if (!helpText) {
+        const path = current.slice(1);  // remove leading "/"
+        for (const key in PAGE_HELP) {
+            if (key.endsWith("/*")) {
+                const base = key.slice(0, -2); // remove "/*"
+                if (path.startsWith(base + "/")) {
+                    helpText = PAGE_HELP[key];
+                    break;
+                }
+            }
+        }
+    }
+    if (!helpText) {
+      helpText = "No help available for this page yet.";
+    }
+    body.innerHTML = helpText || "No help text defined yet.";
+
+    const show = () => popover.style.display = 'block';
+    const hide = () => popover.style.display = 'none';
+
+    icon.addEventListener('mouseenter', show);
+    icon.addEventListener('click', () => popover.style.display = popover.style.display === 'block' ? 'none' : 'block');
+    icon.addEventListener('mouseleave', () => setTimeout(() => { if (!popover.matches(':hover')) hide(); }, 300));
+    popover.addEventListener('mouseenter', show);
+    popover.addEventListener('mouseleave', hide);
+});
+</script>
